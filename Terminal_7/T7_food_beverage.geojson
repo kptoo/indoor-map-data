@@ -1,0 +1,11 @@
+{
+"type": "FeatureCollection",
+"name": "T7_food_beverage",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "food_dunkin_l1", "name": "Dunkin Donuts", "fb_type": "restaurant", "level": "1" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.399424493480595, 33.942992274001476 ], [ -118.399335229817169, 33.943001849762865 ], [ -118.399326765159415, 33.942943118409403 ], [ -118.39940833367946, 33.942934181025983 ], [ -118.399424493480595, 33.942992274001476 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_klatch_l3", "name": "Klatch Coffee", "fb_type": "restaurant", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.399946926114552, 33.942181219521444 ], [ -118.399804114333008, 33.942193690769031 ], [ -118.399794450377883, 33.942109064410275 ], [ -118.399930819522652, 33.942092139128441 ], [ -118.399946926114552, 33.942181219521444 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "food_b_l3", "name": "B Grill By BOA Steakhouse", "fb_type": "restaurant", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.399919008021925, 33.942010185084548 ], [ -118.399772974922001, 33.942023547162293 ], [ -118.399762237194054, 33.941903288386982 ], [ -118.399880352201336, 33.941890817096862 ], [ -118.399919008021925, 33.942010185084548 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_wolfgang_l3", "name": "Wolfgang Puck Express", "fb_type": "restaurant", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.399837401289616, 33.941363458013804 ], [ -118.39972572891908, 33.941359003953586 ], [ -118.39970532723602, 33.94133495202437 ], [ -118.399713917418353, 33.941292193022299 ], [ -118.399724655146287, 33.94124497993257 ], [ -118.399814852060942, 33.941236071799494 ], [ -118.399837401289616, 33.941363458013804 ] ] ] } }
+]
+}

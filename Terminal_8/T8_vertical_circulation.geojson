@@ -1,0 +1,19 @@
+{
+"type": "FeatureCollection",
+"name": "T8_vertical_circulation",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "vertical_circulation_l1", "name": "Door", "level": "1" }, "geometry": { "type": "Point", "coordinates": [ -118.397831149239266, 33.943084925508906 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_elevator_l1", "name": "Elevator", "level": "1" }, "geometry": { "type": "Point", "coordinates": [ -118.397640910865874, 33.943146329993311 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_stairs_l1", "name": "Stairs", "level": "1" }, "geometry": { "type": "Point", "coordinates": [ -118.397570788871576, 33.943151177713879 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_escalator_l1", "name": "Escalator", "level": "1" }, "geometry": { "type": "Point", "coordinates": [ -118.397548713428932, 33.943075230059947 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_escalator_l1", "name": "Escalator", "level": "1" }, "geometry": { "type": "Point", "coordinates": [ -118.397524690153105, 33.943076845968186 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_stairs_l1", "name": "Stairs", "level": "1" }, "geometry": { "type": "Point", "coordinates": [ -118.397490927711402, 33.943044527797639 ] } },
+{ "type": "Feature", "properties": { "feature_id": "access_door_l3", "name": "Door", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397839711589313, 33.943090555938426 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_elevator_l3", "name": "Elevator", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397644684792695, 33.943153273343029 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_stairs_l3", "name": "Stairs", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397574562798397, 33.943157363606943 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_escalator_l3", "name": "Escalator", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397533201778359, 33.942965575465387 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_escalator_l3", "name": "Escalator", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397509645170899, 33.942965802702773 ] } },
+{ "type": "Feature", "properties": { "feature_id": "vertical_stairs_l3", "name": "Stairs", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397477597228203, 33.942936034599491 ] } }
+]
+}

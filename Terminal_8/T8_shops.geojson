@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "T8_shops",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "shop_e_l3", "name": "E! News", "shop_type": "gifts", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.397419570250847, 33.942459155906114 ], [ -118.397303088305264, 33.942471235064659 ], [ -118.397288268057736, 33.942386033820497 ], [ -118.397406310029368, 33.942375680245782 ], [ -118.397419570250847, 33.942459155906114 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "shop_people_l3", "name": "People News", "shop_type": "gifts", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.397205586676648, 33.941484621003767 ], [ -118.397158525890589, 33.941490444950674 ], [ -118.397150205751629, 33.941366632067933 ], [ -118.397192846463867, 33.941354552752657 ], [ -118.397205586676648, 33.941484621003767 ] ] ] } }
+]
+}

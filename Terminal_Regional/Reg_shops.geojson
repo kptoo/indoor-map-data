@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "Reg_shops",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "shop_best_l2", "name": "Best Buy Express", "shop_type": "electronics", "level": "2" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.394157017247451, 33.942313011164053 ], [ -118.394138776907511, 33.942311329809705 ], [ -118.394142222305078, 33.942295693212685 ], [ -118.394159043951873, 33.942296533890016 ], [ -118.394157017247451, 33.942313011164053 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "shop_benefits_l2", "name": "Benefit Cosmetics", "shop_type": "cosmetics", "level": "2" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.394158435940525, 33.942277198309284 ], [ -118.394137560884857, 33.94227686203827 ], [ -118.394143843668601, 33.942258871537412 ], [ -118.394160462644962, 33.942256685775355 ], [ -118.394158435940525, 33.942277198309284 ] ] ] } }
+]
+}

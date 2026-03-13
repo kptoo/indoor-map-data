@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "T4_shops",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "service_enter_l3", "name": "Entertainament Weekly Newsstand", "shop_type": "gifts", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.407001931501298, 33.941758436851451 ], [ -118.406974532195051, 33.94176038519003 ], [ -118.406958092611262, 33.941624326105341 ], [ -118.406982751986902, 33.941621728316406 ], [ -118.407001931501298, 33.941758436851451 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "shop_hudson_l3", "name": "Hudson Booksellers", "shop_type": "novels", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.406947132888774, 33.94118919535326 ], [ -118.406893508532235, 33.941195365133204 ], [ -118.406867674900596, 33.941033651806009 ], [ -118.406922864931801, 33.94102715728846 ], [ -118.406947132888774, 33.94118919535326 ] ] ] } }
+]
+}
