@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "Reg_corridors",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "reg_corridor_l2", "level": "2" }, "geometry": { "type": "MultiLineString", "coordinates": [ [ [ -118.394131089139734, 33.942416064430255 ], [ -118.39413096031565, 33.942114149476417 ], [ -118.394155436893669, 33.941808920385071 ], [ -118.394130702667539, 33.941699482237048 ], [ -118.394126584452948, 33.941490503993776 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "reg_corridor_l2", "level": "2" }, "geometry": { "type": "MultiLineString", "coordinates": [ [ [ -118.394287223942442, 33.941987077694243 ], [ -118.394328705300879, 33.94197810037025 ], [ -118.394321748799769, 33.941923595168518 ], [ -118.394318141725179, 33.941860112595464 ], [ -118.394155436893669, 33.941808920385071 ] ] ] } }
+]
+}

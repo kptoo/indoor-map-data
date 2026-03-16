@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "Reg_services",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "service_american_l2", "name": "American Admirals Club", "type": "lounge", "level": "2" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.394377342538462, 33.9419185645244 ], [ -118.39432545890493, 33.941922749247802 ], [ -118.394331223753085, 33.94182948964901 ], [ -118.394381666174596, 33.941834870013253 ], [ -118.394377342538462, 33.9419185645244 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_parents_l2", "name": "Parent's Room", "type": "parents", "level": "2" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.394213359630726, 33.941687657146652 ], [ -118.394173906451059, 33.941688217602213 ], [ -118.394169582814925, 33.941669946749101 ], [ -118.394212819176218, 33.941668713746608 ], [ -118.394213359630726, 33.941687657146652 ] ] ] } }
+]
+}

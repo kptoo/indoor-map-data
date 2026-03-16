@@ -1,0 +1,12 @@
+{
+"type": "FeatureCollection",
+"name": "T4_food_beverage",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "food_foodatm_l3", "name": "Food ATM", "fb_type": "food atm", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.407326026152575, 33.942022517503297 ], [ -118.407296082625024, 33.942024059933225 ], [ -118.407295201933039, 33.941999462231564 ], [ -118.407324362623271, 33.941998812787205 ], [ -118.407326026152575, 33.942022517503297 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "food_themarket_l3", "name": "The Market", "fb_type": "restaurant", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.407072876133626, 33.940310890143955 ], [ -118.406854464520819, 33.940329724401941 ], [ -118.406857595870079, 33.94028686022255 ], [ -118.407067396272382, 33.940276468903079 ], [ -118.407072876133626, 33.940310890143955 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "food_crowns_l3", "name": "Crowns LAX", "fb_type": "restaurant", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.406797317396325, 33.940202430715189 ], [ -118.40661883048692, 33.940221264997156 ], [ -118.406603173740464, 33.940095270066017 ], [ -118.406789489023097, 33.94009656898379 ], [ -118.406797317396325, 33.940202430715189 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "food_sammys_l3", "name": "Sammy's Woodfired Pizza", "fb_type": "restaurant", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.406837242099726, 33.94139547683222 ], [ -118.406740953109136, 33.941399373525954 ], [ -118.406715119477511, 33.941220774880101 ], [ -118.406810625630769, 33.941214280376826 ], [ -118.406837242099726, 33.94139547683222 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "food_starbucks_l3", "name": "Starbucks", "fb_type": "restaurant", "level": "3" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.406859552963439, 33.941534458798309 ], [ -118.406768743834093, 33.941543226344635 ], [ -118.406762481135516, 33.941477632087249 ], [ -118.406846636147606, 33.941471137603571 ], [ -118.406859552963439, 33.941534458798309 ] ] ] } }
+]
+}

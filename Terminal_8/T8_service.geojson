@@ -1,0 +1,23 @@
+{
+"type": "FeatureCollection",
+"name": "T8_service",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397607706397267, 33.94287513493591 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_first_l3", "name": "First Aid", "type": "emergency", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397472392861417, 33.942752199288257 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397554840987496, 33.942681187396111 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_bank_l3", "name": "Bank of America ATM", "type": "atm", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397549088792658, 33.942640284519342 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_united_l3", "name": "United Lost and Found Dropoff", "type": "lost and found", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397493484242503, 33.942398048190768 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397374605549047, 33.942017876653033 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397347898930107, 33.941733258177123 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397333107571967, 33.941666108529695 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397306811824109, 33.941536581141385 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397294896563352, 33.941393078199482 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397257918167981, 33.941173903405691 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397180263537535, 33.941011311475577 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_first_l3", "name": "First Aid", "type": "emergency", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397245181165061, 33.941665767668404 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_refill_l3", "name": "Water Refill Station", "type": "refill", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397257096425804, 33.941801941644947 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_charging_l3", "name": "Charging Station", "type": "energy", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397279283463064, 33.941824182805654 ] } },
+{ "type": "Feature", "properties": { "feature_id": "service_first_l3", "name": "First Aid", "type": "emergency", "level": "3" }, "geometry": { "type": "Point", "coordinates": [ -118.397473073366584, 33.942754663399903 ] } }
+]
+}

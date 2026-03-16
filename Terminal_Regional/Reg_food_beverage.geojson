@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "Reg_food_beverage",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "feature_id": "food_foodatm_l2", "name": "Food ATM", "fb_type": "food atm", "level": "2" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.394158030599627, 33.942346638244011 ], [ -118.394135331509958, 33.942344116213484 ], [ -118.39414505969124, 33.942323771831092 ], [ -118.394160057304049, 33.942325621320599 ], [ -118.394158030599627, 33.942346638244011 ] ] ] } },
+{ "type": "Feature", "properties": { "feature_id": "food_natural_l2", "name": "Natural Break", "fb_type": "restaurant", "level": "2" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -118.394215082329438, 33.941786115120287 ], [ -118.394172825541972, 33.941783340868433 ], [ -118.394173395552642, 33.941690750160738 ], [ -118.394214664321709, 33.941690561006986 ], [ -118.394215082329438, 33.941786115120287 ] ] ] } }
+]
+}
