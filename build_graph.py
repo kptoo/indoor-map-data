@@ -1,24 +1,18 @@
 """
 build_graph.py
 ==============
-Pre-processes corridor + connect GeoJSON files for every terminal and outputs
-a clean, topologically-snapped routing graph as  <terminal_folder>/graph.json
+Builds a dense, topologically-snapped routing graph from corridor + connect
+GeoJSON files for every terminal.
+
+Changes vs previous version:
+  - Subdivides every segment into MAX_SEG_M metre intervals (default 3 m)
+    so that POI snap targets are always close to the actual corridor line.
 
 Usage:
     python build_graph.py
 
 Requirements:
     pip install shapely networkx
-
-Output format (graph.json):
-{
-  "nodes": {
-    "<id>": { "lng": 103.123, "lat": 1.456, "level": "3" }
-  },
-  "edges": [
-    { "from": "<id>", "to": "<id>", "cost": 12.3, "level": "3" }
-  ]
-}
 """
 
 import json
@@ -45,10 +39,11 @@ TERMINALS = {
     "W":   {"folder": "Terminal_Wgates",   "prefix": "W"},
 }
 
-LEVELS        = ["1", "2", "3"]
-SNAP_TOL      = 0.00002   # ~2 m in degrees
-MAX_STITCH_M  = 50        # max gap to stitch (metres)
-STITCH_PENALTY= 10        # cost multiplier for stitch edges
+LEVELS         = ["1", "2", "3"]
+SNAP_TOL       = 0.00002   # ~2 m — endpoint snapping tolerance
+MAX_STITCH_M   = 50        # max gap to bridge between components
+STITCH_PENALTY = 10        # cost multiplier for stitch bridge edges
+MAX_SEG_M      = 3.0       # subdivide segments longer than this (metres)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -63,6 +58,7 @@ def haversine_m(lng1, lat1, lng2, lat2):
 
 
 def rc(v):
+    """Round coordinate to 7 decimal places (~1 cm precision)."""
     return round(v, 7)
 
 
@@ -92,6 +88,7 @@ def extract_lines(geojson, level):
 
 
 def snap_lines(lines):
+    """Snap all line endpoints together to close micro-gaps."""
     if not lines:
         return []
     reference = unary_union(lines)
@@ -108,7 +105,32 @@ def snap_lines(lines):
     return snapped
 
 
+def subdivide_segment(a, b, max_m=MAX_SEG_M):
+    """
+    Split the segment a→b into sub-segments of at most max_m metres.
+    Returns list of coordinate pairs covering the full segment.
+    """
+    seg_len = haversine_m(a[0], a[1], b[0], b[1])
+    if seg_len <= max_m:
+        return [(a, b)]
+
+    n = math.ceil(seg_len / max_m)
+    pts = []
+    for i in range(n):
+        t0 = i / n
+        t1 = (i + 1) / n
+        p0 = (a[0] + t0 * (b[0] - a[0]), a[1] + t0 * (b[1] - a[1]))
+        p1 = (a[0] + t1 * (b[0] - a[0]), a[1] + t1 * (b[1] - a[1]))
+        pts.append((p0, p1))
+    return pts
+
+
 def build_nx_graph(lines):
+    """
+    Build a NetworkX graph from snapped lines.
+    Every segment is subdivided into MAX_SEG_M metre intervals so
+    POI snap targets are always close to the actual corridor geometry.
+    """
     G = nx.Graph()
     for ln in lines:
         coords = list(ln.coords)
@@ -117,16 +139,23 @@ def build_nx_graph(lines):
             b = (rc(coords[i+1][0]), rc(coords[i+1][1]))
             if a == b:
                 continue
-            cost = haversine_m(a[0], a[1], b[0], b[1])
-            if G.has_edge(a, b):
-                if G[a][b]["cost"] > cost:
-                    G[a][b]["cost"] = cost
-            else:
-                G.add_edge(a, b, cost=cost)
+            # Subdivide long segments
+            for (p0, p1) in subdivide_segment(a, b):
+                na = (rc(p0[0]), rc(p0[1]))
+                nb = (rc(p1[0]), rc(p1[1]))
+                if na == nb:
+                    continue
+                cost = haversine_m(na[0], na[1], nb[0], nb[1])
+                if G.has_edge(na, nb):
+                    if G[na][nb]["cost"] > cost:
+                        G[na][nb]["cost"] = cost
+                else:
+                    G.add_edge(na, nb, cost=cost)
     return G
 
 
 def stitch(G):
+    """Connect isolated components with penalised bridge edges (max MAX_STITCH_M)."""
     while True:
         comps = sorted(nx.connected_components(G), key=len, reverse=True)
         if len(comps) <= 1:
@@ -154,8 +183,10 @@ def stitch(G):
 def serialise(G, level):
     node_list = list(G.nodes())
     id_map = {n: str(i) for i, n in enumerate(node_list)}
-    nodes = {id_map[n]: {"lng": n[0], "lat": n[1], "level": level}
-             for n in node_list}
+    nodes = {
+        id_map[n]: {"lng": n[0], "lat": n[1], "level": level}
+        for n in node_list
+    }
     edges = []
     seen = set()
     for u, v, data in G.edges(data=True):
@@ -163,8 +194,12 @@ def serialise(G, level):
         if key in seen:
             continue
         seen.add(key)
-        e = {"from": id_map[u], "to": id_map[v],
-             "cost": round(data["cost"], 4), "level": level}
+        e = {
+            "from": id_map[u],
+            "to":   id_map[v],
+            "cost": round(data["cost"], 4),
+            "level": level
+        }
         if data.get("stitch"):
             e["stitch"] = True
         edges.append(e)
@@ -203,8 +238,8 @@ def process_terminal(term_key, folder, prefix):
 
     out_path = os.path.join(folder, "graph.json")
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"nodes": all_nodes, "edges": all_edges}, f, separators=(",", ":"))
-
+        json.dump({"nodes": all_nodes, "edges": all_edges},
+                  f, separators=(",", ":"))
     print(f"  → {out_path}  ({os.path.getsize(out_path)/1024:.1f} KB)")
 
 
