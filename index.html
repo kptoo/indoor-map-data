@@ -300,7 +300,7 @@ function populateSelects(level) {
 
 // ─── RENDER ──────────────────────────────────────────────────────────────────
 function clearLayers() { mapLayers.forEach(l=>map.removeLayer(l)); mapLayers=[]; }
-function addLayer(l) { l.addTo(map); mapLayers.push(l); return l; }
+function addLayer(l)   { l.addTo(map); mapLayers.push(l); return l; }
 
 function renderLevel(level) {
   clearLayers();
@@ -317,14 +317,18 @@ function renderLevel(level) {
       String(f.properties?.Level||f.properties?.level||'3') === level);
     if (!features.length) return;
     addLayer(L.geoJSON({type:'FeatureCollection',features}, {
-      style: { color:'#4fc3f7', weight: key==='corridors'?3:1.5,
-               opacity: key==='corridors'?0.7:0.4, dashArray: key==='connect'?'4 4':null }
+      style: {
+        color:'#4fc3f7',
+        weight:   key==='corridors' ? 3    : 1.5,
+        opacity:  key==='corridors' ? 0.7  : 0.4,
+        dashArray:key==='connect'   ? '4 4': null
+      }
     }));
   });
 
   const poiStyles = {
-    gate:     '#e94560', food: '#ffb300', shop: '#66bb6a',
-    restroom: '#ab47bc', service: '#26c6da', vertical: '#78909c'
+    gate:     '#e94560', food:     '#ffb300', shop:    '#66bb6a',
+    restroom: '#ab47bc', service:  '#26c6da', vertical:'#78909c'
   };
   const typeMap = {
     gates:'gate', food:'food', shops:'shop', restrooms:'restroom',
@@ -363,9 +367,8 @@ function renderLevel(level) {
 
 const SNAP = 0.000015; // ~1.5 m snap tolerance
 
-// FIX 3: Maximum distance (metres) allowed for stitching disconnected components.
-// Components further apart than this are likely on different floors / truly separate
-// and should NOT be bridged on the same level.
+// FIX 3: max gap (metres) we will stitch across.
+// Any two components further apart than this are left unconnected on this level.
 const MAX_STITCH_DIST = 50;
 
 function ptKey(lng, lat) {
@@ -374,8 +377,8 @@ function ptKey(lng, lat) {
 
 class Graph {
   constructor() {
-    this.nodes = {};   // key → [lng,lat]
-    this.adj   = {};   // key → [{key,cost}]
+    this.nodes = {};
+    this.adj   = {};
   }
 
   addNode(lng, lat) {
@@ -410,9 +413,10 @@ class Graph {
     return comps;
   }
 
-  // FIX 1 + FIX 3: Only stitch components within MAX_STITCH_DIST metres.
-  // Stitch edges get a 10× distance penalty so Dijkstra strongly prefers
-  // real corridor geometry and only falls back to a stitch when truly needed.
+  // FIX 1 + FIX 3:
+  // • Only stitch components that are within MAX_STITCH_DIST metres of each other.
+  // • Stitch edges are penalised 10× their real distance so Dijkstra always
+  //   prefers genuine corridor geometry and only crosses a stitch as a last resort.
   stitchComponents() {
     let comps = this.components();
     if (comps.length <= 1) return;
@@ -431,21 +435,19 @@ class Graph {
         }
       }
 
-      // FIX 3: skip stitch if components are too far apart
+      // FIX 3: don't bridge components that are too far apart
       if (!bestSK || !bestMK || bestCost > MAX_STITCH_DIST) {
-        // Still absorb into mainSet so later components can bridge through main
-        small.forEach(k => mainSet.add(k));
+        small.forEach(k => mainSet.add(k)); // absorb anyway so indices stay consistent
         continue;
       }
 
-      // FIX 1: penalise stitch edge heavily so real corridor paths always win
-      const penalty = bestCost * 10;
-      this.addEdge(bestSK, bestMK, penalty);
+      // FIX 1: heavy penalty keeps Dijkstra on real corridors
+      this.addEdge(bestSK, bestMK, bestCost * 10);
       small.forEach(k => mainSet.add(k));
     }
   }
 
-  // Snap an external [lng,lat] onto the nearest graph node or edge foot-point
+  // Snap an external [lng,lat] onto the nearest node or edge foot-point
   snapPoint(lng, lat) {
     const pt = [lng, lat];
     let bestNode = null, bestNodeDist = Infinity;
@@ -496,9 +498,9 @@ function buildGraph(level) {
     (allData[src]?.features||[]).forEach(f => {
       const p = f.properties||{};
       if (String(p.Level||p.level||'3') !== level) return;
-      const geom = f.geometry;
+      const geom  = f.geometry;
       const lines = geom.type==='LineString'      ? [geom.coordinates]
-                  : geom.type==='MultiLineString' ? geom.coordinates : [];
+                  : geom.type==='MultiLineString' ?  geom.coordinates : [];
       lines.forEach(coords => {
         for (let i=0; i<coords.length-1; i++) {
           const k1 = g.addNode(coords[i][0],   coords[i][1]);
@@ -543,39 +545,6 @@ function dijkstra(g, startKey, endKey) {
   return { path, dist: dist2[endKey] };
 }
 
-// ─── FIX 2: PATH SMOOTHING ───────────────────────────────────────────────────
-// Walk the raw Dijkstra path and skip intermediate waypoints that lie almost
-// perfectly on the straight line between their neighbours.  This removes the
-// visual zigzag caused by dense graph topology without affecting real turns.
-function smoothPath(path) {
-  if (path.length <= 2) return path;
-
-  const COLLINEAR_TOL = 1.05; // allow up to 5% overhead before keeping a point
-
-  const result = [path[0]];
-  let i = 0;
-
-  while (i < path.length - 1) {
-    let farthest = i + 1;
-    for (let j = i + 2; j < path.length; j++) {
-      const direct = dist(path[i], path[j]);
-      // Sum of two legs through the intermediate point
-      const detour = dist(path[i], path[j - 1]) + dist(path[j - 1], path[j]);
-      // If skipping the intermediate point costs ≤ COLLINEAR_TOL × direct,
-      // the point is redundant — advance farthest and keep looking ahead.
-      if (direct <= detour * COLLINEAR_TOL) {
-        farthest = j;
-      } else {
-        break; // real turn detected — stop looking further
-      }
-    }
-    result.push(path[farthest]);
-    i = farthest;
-  }
-
-  return result;
-}
-
 // ─── ROUTE ───────────────────────────────────────────────────────────────────
 function clearRoute() {
   if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
@@ -611,7 +580,7 @@ document.getElementById('btn-route').addEventListener('click', () => {
   const fromKey = g.snapPoint(fromPoi.centroid[0], fromPoi.centroid[1]);
   const toKey   = g.snapPoint(toPoi.centroid[0],   toPoi.centroid[1]);
 
-  // If snap injected isolated virtual nodes into separate components, bridge them
+  // If snapping injected isolated virtual nodes into separate components, bridge them
   const compsAfterSnap = g.components();
   if (compsAfterSnap.length > 1) {
     const fromComp = compsAfterSnap.find(c => c.has(fromKey));
@@ -622,16 +591,13 @@ document.getElementById('btn-route').addEventListener('click', () => {
   }
 
   const result = dijkstra(g, fromKey, toKey);
-
   if (!result) {
     setStatus('❌ No route found — please report the selected pair.');
     return;
   }
 
-  // FIX 2: smooth the raw Dijkstra path before drawing
-  const smoothed = smoothPath(result.path);
-
-  const latlngs = smoothed.map(p => [p[1], p[0]]);
+  // Draw route directly on the corridor/connect geometry — no smoothing
+  const latlngs = result.path.map(p => [p[1], p[0]]);
   routeLayer = L.polyline(latlngs, {
     color:'#ff5722', weight:5, opacity:0.9, dashArray:'10 6'
   }).addTo(map);
@@ -641,7 +607,6 @@ document.getElementById('btn-route').addEventListener('click', () => {
 
   map.fitBounds(routeLayer.getBounds(), {padding:[60,60]});
 
-  // Report the true unsmoothed distance (more accurate walking estimate)
   const metres = Math.round(result.dist);
   const mins   = Math.max(1, Math.round(metres / 80));
   setStatus(`✅ Route found: <span>${metres} m</span> · approx <span>${mins} min</span> walk &nbsp;|&nbsp; ${fromPoi.name} → ${toPoi.name}`);
