@@ -139,7 +139,6 @@
 <script>
 
 // ─── TERMINAL CONFIG ──────────────────────────────────────────────────────────
-// Maps terminal key → { label, folder, prefix }
 const TERMINALS = {
   T1:  { label: 'Terminal 1',        folder: 'Terminal_1',        prefix: 'T1'  },
   T2:  { label: 'Terminal 2',        folder: 'Terminal_2',        prefix: 'T2'  },
@@ -179,8 +178,8 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let currentTerminal = 'T1';
 let currentLevel    = '3';
-let allData  = {};
-let poiList  = [];
+let allData   = {};
+let poiList   = [];
 let mapLayers = [];
 let routeLayer = null;
 let markerFrom = null, markerTo = null;
@@ -188,7 +187,7 @@ let markerFrom = null, markerTo = null;
 const statusEl = document.getElementById('status-bar');
 function setStatus(msg) { statusEl.innerHTML = msg; }
 
-// ─── LOAD ALL FILES FOR CURRENT TERMINAL ─────────────────────────────────────
+// ─── LOAD ALL FILES ───────────────────────────────────────────────────────────
 async function loadAll() {
   setStatus('Loading GeoJSON data…');
   allData = {};
@@ -228,6 +227,7 @@ function centroid(geom) {
   ];
 }
 
+// Euclidean distance in metres
 function dist(a, b) {
   const dx = (a[0]-b[0]) * Math.cos((a[1]+b[1])*0.5*Math.PI/180) * 111320;
   const dy = (a[1]-b[1]) * 110540;
@@ -326,8 +326,10 @@ function renderLevel(level) {
     gate:     '#e94560', food: '#ffb300', shop: '#66bb6a',
     restroom: '#ab47bc', service: '#26c6da', vertical: '#78909c'
   };
-  const typeMap = {gates:'gate',food:'food',shops:'shop',restrooms:'restroom',
-                   service:'service',services:'service',vert:'vertical'};
+  const typeMap = {
+    gates:'gate', food:'food', shops:'shop', restrooms:'restroom',
+    service:'service', services:'service', vert:'vertical'
+  };
 
   ['gates','food','shops','restrooms','service','services','vert'].forEach(key => {
     const features = (allData[key]?.features||[]).filter(f =>
@@ -359,7 +361,12 @@ function renderLevel(level) {
 // GRAPH ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SNAP = 0.000015;
+const SNAP = 0.000015; // ~1.5 m snap tolerance
+
+// FIX 3: Maximum distance (metres) allowed for stitching disconnected components.
+// Components further apart than this are likely on different floors / truly separate
+// and should NOT be bridged on the same level.
+const MAX_STITCH_DIST = 50;
 
 function ptKey(lng, lat) {
   return `${(Math.round(lng/SNAP)*SNAP).toFixed(8)},${(Math.round(lat/SNAP)*SNAP).toFixed(8)}`;
@@ -367,8 +374,8 @@ function ptKey(lng, lat) {
 
 class Graph {
   constructor() {
-    this.nodes = {};
-    this.adj   = {};
+    this.nodes = {};   // key → [lng,lat]
+    this.adj   = {};   // key → [{key,cost}]
   }
 
   addNode(lng, lat) {
@@ -390,7 +397,7 @@ class Graph {
     const comps   = [];
     for (const k of Object.keys(this.nodes)) {
       if (visited.has(k)) continue;
-      const comp = new Set();
+      const comp  = new Set();
       const queue = [k];
       while (queue.length) {
         const cur = queue.pop();
@@ -403,14 +410,19 @@ class Graph {
     return comps;
   }
 
+  // FIX 1 + FIX 3: Only stitch components within MAX_STITCH_DIST metres.
+  // Stitch edges get a 10× distance penalty so Dijkstra strongly prefers
+  // real corridor geometry and only falls back to a stitch when truly needed.
   stitchComponents() {
     let comps = this.components();
     if (comps.length <= 1) return;
     comps.sort((a,b) => b.size - a.size);
     const mainSet = comps[0];
+
     for (let i = 1; i < comps.length; i++) {
       const small = comps[i];
       let bestCost = Infinity, bestSK = null, bestMK = null;
+
       for (const sk of small) {
         const sc = this.nodes[sk];
         for (const mk of mainSet) {
@@ -418,13 +430,22 @@ class Graph {
           if (c < bestCost) { bestCost = c; bestSK = sk; bestMK = mk; }
         }
       }
-      if (bestSK && bestMK) {
-        this.addEdge(bestSK, bestMK, 0);
+
+      // FIX 3: skip stitch if components are too far apart
+      if (!bestSK || !bestMK || bestCost > MAX_STITCH_DIST) {
+        // Still absorb into mainSet so later components can bridge through main
         small.forEach(k => mainSet.add(k));
+        continue;
       }
+
+      // FIX 1: penalise stitch edge heavily so real corridor paths always win
+      const penalty = bestCost * 10;
+      this.addEdge(bestSK, bestMK, penalty);
+      small.forEach(k => mainSet.add(k));
     }
   }
 
+  // Snap an external [lng,lat] onto the nearest graph node or edge foot-point
   snapPoint(lng, lat) {
     const pt = [lng, lat];
     let bestNode = null, bestNodeDist = Infinity;
@@ -476,7 +497,7 @@ function buildGraph(level) {
       const p = f.properties||{};
       if (String(p.Level||p.level||'3') !== level) return;
       const geom = f.geometry;
-      const lines = geom.type==='LineString' ? [geom.coordinates]
+      const lines = geom.type==='LineString'      ? [geom.coordinates]
                   : geom.type==='MultiLineString' ? geom.coordinates : [];
       lines.forEach(coords => {
         for (let i=0; i<coords.length-1; i++) {
@@ -496,7 +517,7 @@ function dijkstra(g, startKey, endKey) {
   const dist2   = { [startKey]: 0 };
   const prev    = {};
   const visited = new Set();
-  const pq = [[0, startKey]];
+  const pq      = [[0, startKey]];
 
   while (pq.length) {
     pq.sort((a,b)=>a[0]-b[0]);
@@ -520,6 +541,39 @@ function dijkstra(g, startKey, endKey) {
   let cur = endKey;
   while (cur !== undefined) { path.unshift(g.nodes[cur]); cur = prev[cur]; }
   return { path, dist: dist2[endKey] };
+}
+
+// ─── FIX 2: PATH SMOOTHING ───────────────────────────────────────────────────
+// Walk the raw Dijkstra path and skip intermediate waypoints that lie almost
+// perfectly on the straight line between their neighbours.  This removes the
+// visual zigzag caused by dense graph topology without affecting real turns.
+function smoothPath(path) {
+  if (path.length <= 2) return path;
+
+  const COLLINEAR_TOL = 1.05; // allow up to 5% overhead before keeping a point
+
+  const result = [path[0]];
+  let i = 0;
+
+  while (i < path.length - 1) {
+    let farthest = i + 1;
+    for (let j = i + 2; j < path.length; j++) {
+      const direct = dist(path[i], path[j]);
+      // Sum of two legs through the intermediate point
+      const detour = dist(path[i], path[j - 1]) + dist(path[j - 1], path[j]);
+      // If skipping the intermediate point costs ≤ COLLINEAR_TOL × direct,
+      // the point is redundant — advance farthest and keep looking ahead.
+      if (direct <= detour * COLLINEAR_TOL) {
+        farthest = j;
+      } else {
+        break; // real turn detected — stop looking further
+      }
+    }
+    result.push(path[farthest]);
+    i = farthest;
+  }
+
+  return result;
 }
 
 // ─── ROUTE ───────────────────────────────────────────────────────────────────
@@ -557,6 +611,7 @@ document.getElementById('btn-route').addEventListener('click', () => {
   const fromKey = g.snapPoint(fromPoi.centroid[0], fromPoi.centroid[1]);
   const toKey   = g.snapPoint(toPoi.centroid[0],   toPoi.centroid[1]);
 
+  // If snap injected isolated virtual nodes into separate components, bridge them
   const compsAfterSnap = g.components();
   if (compsAfterSnap.length > 1) {
     const fromComp = compsAfterSnap.find(c => c.has(fromKey));
@@ -573,7 +628,10 @@ document.getElementById('btn-route').addEventListener('click', () => {
     return;
   }
 
-  const latlngs = result.path.map(p=>[p[1],p[0]]);
+  // FIX 2: smooth the raw Dijkstra path before drawing
+  const smoothed = smoothPath(result.path);
+
+  const latlngs = smoothed.map(p => [p[1], p[0]]);
   routeLayer = L.polyline(latlngs, {
     color:'#ff5722', weight:5, opacity:0.9, dashArray:'10 6'
   }).addTo(map);
@@ -583,8 +641,9 @@ document.getElementById('btn-route').addEventListener('click', () => {
 
   map.fitBounds(routeLayer.getBounds(), {padding:[60,60]});
 
+  // Report the true unsmoothed distance (more accurate walking estimate)
   const metres = Math.round(result.dist);
-  const mins   = Math.max(1, Math.round(metres/80));
+  const mins   = Math.max(1, Math.round(metres / 80));
   setStatus(`✅ Route found: <span>${metres} m</span> · approx <span>${mins} min</span> walk &nbsp;|&nbsp; ${fromPoi.name} → ${toPoi.name}`);
 });
 
