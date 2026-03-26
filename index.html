@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+  body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee;
+         height: 100vh; display: flex; flex-direction: column; }
   #header {
     background: #16213e; padding: 10px 16px; display: flex;
     align-items: center; gap: 12px; flex-wrap: wrap;
@@ -144,8 +145,8 @@ let currentTerminal = 'T1';
 let currentLevel    = '3';
 let allData    = {};
 let graphData  = null;
-let graphAdj   = {};    // pre-built adjacency for current level
-let graphNodes = {};    // id → {lng,lat} for current level
+let graphAdj   = {};   // nodeId → [{to, cost}]  for current level
+let graphNodes = {};   // nodeId → {lng, lat}     for current level
 let poiList    = [];
 let mapLayers  = [];
 let routeLayer = null;
@@ -154,8 +155,9 @@ let markerFrom = null, markerTo = null;
 const statusEl = document.getElementById('status-bar');
 function setStatus(msg) { statusEl.innerHTML = msg; }
 
-// ─── DISTANCE (metres) ───────────────────────────────────────────────────────
+// ─── DISTANCE ────────────────────────────────────────────────────────────────
 function dist(a, b) {
+  // a, b are [lng, lat]
   const dx = (a[0]-b[0]) * Math.cos((a[1]+b[1])*0.5*Math.PI/180) * 111320;
   const dy = (a[1]-b[1]) * 110540;
   return Math.sqrt(dx*dx + dy*dy);
@@ -164,7 +166,7 @@ function dist(a, b) {
 // ─── LOAD ────────────────────────────────────────────────────────────────────
 async function loadAll() {
   setStatus('Loading data…');
-  allData   = {};
+  allData  = {};
   graphData = null;
 
   const FILES = getFiles(currentTerminal);
@@ -213,15 +215,6 @@ function centroid(geom) {
   ];
 }
 
-function closestPointOnSegment(p, a, b) {
-  const dx = b[0]-a[0], dy = b[1]-a[1];
-  const lenSq = dx*dx + dy*dy;
-  if (lenSq === 0) return { pt: a, t: 0 };
-  let t = ((p[0]-a[0])*dx + (p[1]-a[1])*dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  return { pt: [a[0]+t*dx, a[1]+t*dy], t };
-}
-
 // ─── POI LIST ────────────────────────────────────────────────────────────────
 function buildPoiList() {
   poiList = [];
@@ -243,7 +236,7 @@ function buildPoiList() {
       if (!c) return;
       const p   = f.properties || {};
       const lvl = String(p.level || p.Level || '3');
-      const name= p.name || p.feature_id || (type+'_'+uid);
+      const name = p.name || p.feature_id || (type + '_' + uid);
       poiList.push({ id: uid++, type, level: lvl, centroid: c, name });
     });
   });
@@ -329,8 +322,6 @@ function renderLevel(level) {
   });
 
   populateSelects(level);
-
-  // Pre-build adjacency for this level (fast lookup at route time)
   buildLevelAdjacency(level);
 
   try {
@@ -339,15 +330,15 @@ function renderLevel(level) {
       : { type:'FeatureCollection',
           features:(allData.corridors?.features||[]).filter(f=>
             String(f.properties?.Level||f.properties?.level||'3')===level) };
-    if (src.features?.length) map.fitBounds(L.geoJSON(src).getBounds(), {padding:[30,30]});
+    if (src.features?.length)
+      map.fitBounds(L.geoJSON(src).getBounds(), {padding:[30,30]});
   } catch(e) {}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GRAPH / ROUTING
+// ROUTING — pure node-snap, no virtual node injection
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Build adjacency + node lookup for the given level from graphData
 function buildLevelAdjacency(level) {
   graphAdj   = {};
   graphNodes = {};
@@ -368,87 +359,22 @@ function buildLevelAdjacency(level) {
   });
 }
 
-// ── Edge-snap ─────────────────────────────────────────────────────────────────
-// Finds the closest point on ANY graph edge to [lng, lat].
-// Injects a temporary virtual node at that foot-point and connects it to
-// both endpoints of the hosting edge. Returns the virtual node id.
-//
-// This guarantees the route always starts/ends exactly on the corridor line,
-// not just at the nearest node which may be on a different branch.
-
-let _virtualCounter = 0;
-
-function snapToEdge(lng, lat) {
-  const pt = [lng, lat];
-  let bestDist = Infinity;
-  let bestFoot = null;
-  let bestA = null, bestB = null;
-
-  // Check every edge for the closest foot-point
-  const seen = new Set();
-  for (const [idA, neighbours] of Object.entries(graphAdj)) {
-    const nA = graphNodes[idA];
-    for (const { to: idB } of neighbours) {
-      const edgeKey = idA < idB ? `${idA}|${idB}` : `${idB}|${idA}`;
-      if (seen.has(edgeKey)) continue;
-      seen.add(edgeKey);
-
-      const nB = graphNodes[idB];
-      const { pt: foot } = closestPointOnSegment(
-        pt,
-        [nA.lng, nA.lat],
-        [nB.lng, nB.lat]
-      );
-      const d = dist(pt, foot);
-      if (d < bestDist) {
-        bestDist = d;
-        bestFoot = foot;
-        bestA = idA;
-        bestB = idB;
-      }
-    }
-  }
-
-  if (!bestFoot) {
-    // Fallback: snap to nearest node
-    return snapToNearestNode(lng, lat);
-  }
-
-  // Also check nearest node — if it's closer than the edge foot, use it directly
-  const { id: nearestId, d: nearestDist } = snapToNearestNode(lng, lat, true);
-  if (nearestDist <= bestDist + 0.5) {
-    return nearestId;
-  }
-
-  // Inject virtual node at foot-point
-  const vid = '__v' + (_virtualCounter++);
-  const footLng = bestFoot[0], footLat = bestFoot[1];
-  graphNodes[vid] = { lng: footLng, lat: footLat, level: graphNodes[bestA].level };
-  graphAdj[vid]   = [];
-
-  // Cost from foot to each endpoint
-  const costA = dist(bestFoot, [graphNodes[bestA].lng, graphNodes[bestA].lat]);
-  const costB = dist(bestFoot, [graphNodes[bestB].lng, graphNodes[bestB].lat]);
-
-  graphAdj[vid].push({ to: bestA, cost: costA });
-  graphAdj[vid].push({ to: bestB, cost: costB });
-  graphAdj[bestA].push({ to: vid, cost: costA });
-  graphAdj[bestB].push({ to: vid, cost: costB });
-
-  return vid;
-}
-
-function snapToNearestNode(lng, lat, returnMeta = false) {
+// Snap POI centroid to the nearest graph NODE.
+// With 3 m segment subdivision from build_graph.py the nearest node is
+// always within a few metres of the actual corridor line — no virtual
+// node injection needed, so the route can never leave the graph edges.
+function nearestNode(lng, lat) {
   const pt = [lng, lat];
   let bestId = null, bestDist = Infinity;
   for (const [id, n] of Object.entries(graphNodes)) {
     const d = dist(pt, [n.lng, n.lat]);
     if (d < bestDist) { bestDist = d; bestId = id; }
   }
-  return returnMeta ? { id: bestId, d: bestDist } : bestId;
+  return bestId;
 }
 
-// ── Dijkstra ──────────────────────────────────────────────────────────────────
+// Dijkstra on the pre-built adjacency — path reconstructed via prev[],
+// exact start→end, no overshoot.
 function dijkstra(startId, endId) {
   const dist2   = { [startId]: 0 };
   const prev    = {};
@@ -473,7 +399,6 @@ function dijkstra(startId, endId) {
 
   if (dist2[endId] === undefined) return null;
 
-  // Reconstruct — prev[] walkback is exact, no overshoot
   const path = [];
   let cur = endId;
   while (cur !== undefined) {
@@ -482,22 +407,6 @@ function dijkstra(startId, endId) {
     cur = prev[cur];
   }
   return { path, dist: dist2[endId] };
-}
-
-// ── Clean up virtual nodes after routing ─────────────────────────────────────
-function removeVirtualNodes() {
-  for (const id of Object.keys(graphNodes)) {
-    if (!id.startsWith('__v')) continue;
-    // Remove from neighbours' adjacency lists
-    for (const { to } of graphAdj[id] || []) {
-      if (graphAdj[to]) {
-        graphAdj[to] = graphAdj[to].filter(e => e.to !== id);
-      }
-    }
-    delete graphNodes[id];
-    delete graphAdj[id];
-  }
-  _virtualCounter = 0;
 }
 
 // ─── ROUTE HANDLER ───────────────────────────────────────────────────────────
@@ -522,34 +431,30 @@ document.getElementById('btn-route').addEventListener('click', () => {
 
   const fromPoi = poiList.find(p=>String(p.id)===String(fromId));
   const toPoi   = poiList.find(p=>String(p.id)===String(toId));
-  if (!fromPoi||!toPoi) { setStatus('⚠️ Could not find selected POIs.'); return; }
-  if (!graphData)       { setStatus('⚠️ graph.json not loaded.'); return; }
+  if (!fromPoi || !toPoi) { setStatus('⚠️ Could not find selected POIs.'); return; }
+  if (!graphData)         { setStatus('⚠️ graph.json not loaded — run build_graph.py first.'); return; }
 
   setStatus('Computing route…');
   clearRoute();
-  removeVirtualNodes(); // clean up any leftover virtual nodes from last route
 
   if (!Object.keys(graphNodes).length) {
     setStatus('⚠️ No graph nodes for this level.'); return;
   }
 
-  // Snap each POI to the nearest edge (exact corridor geometry entry point)
-  const fromNodeId = snapToEdge(fromPoi.centroid[0], fromPoi.centroid[1]);
-  const toNodeId   = snapToEdge(toPoi.centroid[0],   toPoi.centroid[1]);
+  // Snap each POI centroid to its nearest graph node (always on a corridor edge)
+  const fromNodeId = nearestNode(fromPoi.centroid[0], fromPoi.centroid[1]);
+  const toNodeId   = nearestNode(toPoi.centroid[0],   toPoi.centroid[1]);
 
   if (!fromNodeId || !toNodeId) {
-    setStatus('⚠️ Could not snap POIs to graph.'); return;
+    setStatus('⚠️ Could not snap POIs to graph nodes.'); return;
   }
 
   const result = dijkstra(fromNodeId, toNodeId);
-
-  // Clean up virtual nodes so next route starts with a clean graph
-  removeVirtualNodes();
-
   if (!result) {
     setStatus('❌ No route found between these two points.'); return;
   }
 
+  // result.path contains only graph nodes — every step is a real corridor edge
   const latlngs = result.path.map(p => [p[1], p[0]]);
   routeLayer = L.polyline(latlngs, {
     color:'#ff5722', weight:5, opacity:0.9, dashArray:'10 6'
@@ -567,13 +472,12 @@ document.getElementById('btn-route').addEventListener('click', () => {
 
 document.getElementById('btn-clear').addEventListener('click', () => {
   clearRoute();
-  removeVirtualNodes();
   document.getElementById('sel-from').value = '';
   document.getElementById('sel-to').value   = '';
   setStatus('Cleared. Select From &amp; To and click <b>Find Route</b>.');
 });
 
-// ─── LEVEL BUTTONS ───────────────────────────────────────���───────────────────
+// ─── LEVEL BUTTONS ───────────────────────────────────────────────────────────
 document.querySelectorAll('.level-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.level-btn').forEach(b=>b.classList.remove('active'));
