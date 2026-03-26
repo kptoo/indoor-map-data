@@ -243,7 +243,7 @@ function closestPointOnSegment(p, p1, p2) {
   return [p1[0]+t*dx, p1[1]+t*dy];
 }
 
-// ─── POI LIST ────────────────────────────────────────────────────────────────
+// ─── POI LIST ────────────────────────────────────────��───────────────────────
 function buildPoiList() {
   poiList = [];
   const sources = [
@@ -318,7 +318,7 @@ function renderLevel(level) {
     if (!features.length) return;
     addLayer(L.geoJSON({type:'FeatureCollection',features}, {
       style: {
-        color:'#4fc3f7',
+        color:    '#4fc3f7',
         weight:   key==='corridors' ? 3    : 1.5,
         opacity:  key==='corridors' ? 0.7  : 0.4,
         dashArray:key==='connect'   ? '4 4': null
@@ -327,8 +327,8 @@ function renderLevel(level) {
   });
 
   const poiStyles = {
-    gate:     '#e94560', food:     '#ffb300', shop:    '#66bb6a',
-    restroom: '#ab47bc', service:  '#26c6da', vertical:'#78909c'
+    gate:     '#e94560', food:    '#ffb300', shop:    '#66bb6a',
+    restroom: '#ab47bc', service: '#26c6da', vertical:'#78909c'
   };
   const typeMap = {
     gates:'gate', food:'food', shops:'shop', restrooms:'restroom',
@@ -367,8 +367,8 @@ function renderLevel(level) {
 
 const SNAP = 0.000015; // ~1.5 m snap tolerance
 
-// FIX 3: max gap (metres) we will stitch across.
-// Any two components further apart than this are left unconnected on this level.
+// Max gap (metres) we will stitch across between disconnected components.
+// Components further apart than this are left unconnected on this level.
 const MAX_STITCH_DIST = 50;
 
 function ptKey(lng, lat) {
@@ -413,10 +413,8 @@ class Graph {
     return comps;
   }
 
-  // FIX 1 + FIX 3:
-  // • Only stitch components that are within MAX_STITCH_DIST metres of each other.
-  // • Stitch edges are penalised 10× their real distance so Dijkstra always
-  //   prefers genuine corridor geometry and only crosses a stitch as a last resort.
+  // Only stitch components within MAX_STITCH_DIST metres.
+  // Stitch edges get a 10× penalty so real corridor paths always win.
   stitchComponents() {
     let comps = this.components();
     if (comps.length <= 1) return;
@@ -435,19 +433,16 @@ class Graph {
         }
       }
 
-      // FIX 3: don't bridge components that are too far apart
       if (!bestSK || !bestMK || bestCost > MAX_STITCH_DIST) {
-        small.forEach(k => mainSet.add(k)); // absorb anyway so indices stay consistent
+        small.forEach(k => mainSet.add(k));
         continue;
       }
 
-      // FIX 1: heavy penalty keeps Dijkstra on real corridors
       this.addEdge(bestSK, bestMK, bestCost * 10);
       small.forEach(k => mainSet.add(k));
     }
   }
 
-  // Snap an external [lng,lat] onto the nearest node or edge foot-point
   snapPoint(lng, lat) {
     const pt = [lng, lat];
     let bestNode = null, bestNodeDist = Infinity;
@@ -545,6 +540,33 @@ function dijkstra(g, startKey, endKey) {
   return { path, dist: dist2[endKey] };
 }
 
+// ─── PATH TRUNCATION ─────────────────────────────────────────────────────────
+// Trim any overshoot tail past the destination: find the path node closest
+// to the destination centroid and cut everything after it.
+function truncateAtDestination(path, destCentroid) {
+  if (path.length <= 2) return path;
+  let closestIdx = 0;
+  let closestDist = Infinity;
+  for (let i = 0; i < path.length; i++) {
+    const d = dist(path[i], destCentroid);
+    if (d < closestDist) { closestDist = d; closestIdx = i; }
+  }
+  return path.slice(0, closestIdx + 1);
+}
+
+// Trim any overshoot tail before the origin: find the path node closest
+// to the origin centroid and cut everything before it.
+function truncateAtOrigin(path, fromCentroid) {
+  if (path.length <= 2) return path;
+  let closestIdx = 0;
+  let closestDist = Infinity;
+  for (let i = 0; i < path.length; i++) {
+    const d = dist(path[i], fromCentroid);
+    if (d < closestDist) { closestDist = d; closestIdx = i; }
+  }
+  return path.slice(closestIdx);
+}
+
 // ─── ROUTE ───────────────────────────────────────────────────────────────────
 function clearRoute() {
   if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
@@ -580,7 +602,7 @@ document.getElementById('btn-route').addEventListener('click', () => {
   const fromKey = g.snapPoint(fromPoi.centroid[0], fromPoi.centroid[1]);
   const toKey   = g.snapPoint(toPoi.centroid[0],   toPoi.centroid[1]);
 
-  // If snapping injected isolated virtual nodes into separate components, bridge them
+  // Bridge snap nodes if they ended up in different components
   const compsAfterSnap = g.components();
   if (compsAfterSnap.length > 1) {
     const fromComp = compsAfterSnap.find(c => c.has(fromKey));
@@ -596,8 +618,12 @@ document.getElementById('btn-route').addEventListener('click', () => {
     return;
   }
 
-  // Draw route directly on the corridor/connect geometry — no smoothing
-  const latlngs = result.path.map(p => [p[1], p[0]]);
+  // Truncate any overshoot at both ends of the path
+  let path = result.path;
+  path = truncateAtOrigin(path, fromPoi.centroid);
+  path = truncateAtDestination(path, toPoi.centroid);
+
+  const latlngs = path.map(p => [p[1], p[0]]);
   routeLayer = L.polyline(latlngs, {
     color:'#ff5722', weight:5, opacity:0.9, dashArray:'10 6'
   }).addTo(map);
@@ -607,6 +633,7 @@ document.getElementById('btn-route').addEventListener('click', () => {
 
   map.fitBounds(routeLayer.getBounds(), {padding:[60,60]});
 
+  // Use the original full Dijkstra distance for the walking estimate
   const metres = Math.round(result.dist);
   const mins   = Math.max(1, Math.round(metres / 80));
   setStatus(`✅ Route found: <span>${metres} m</span> · approx <span>${mins} min</span> walk &nbsp;|&nbsp; ${fromPoi.name} → ${toPoi.name}`);
