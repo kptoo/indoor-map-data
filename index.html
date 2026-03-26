@@ -169,7 +169,7 @@ function getFiles(termKey) {
   };
 }
 
-// ─── MAP INIT ────────────────────────────────────────────────────────────────
+// ─── MAP INIT ──────���─────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: true });
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 22
@@ -227,7 +227,6 @@ function centroid(geom) {
   ];
 }
 
-// Euclidean distance in metres
 function dist(a, b) {
   const dx = (a[0]-b[0]) * Math.cos((a[1]+b[1])*0.5*Math.PI/180) * 111320;
   const dy = (a[1]-b[1]) * 110540;
@@ -243,7 +242,7 @@ function closestPointOnSegment(p, p1, p2) {
   return [p1[0]+t*dx, p1[1]+t*dy];
 }
 
-// ─── POI LIST ────────────────────────────────────────��───────────────────────
+// ─── POI LIST ────────────────────────────────────────────────────────────────
 function buildPoiList() {
   poiList = [];
   const sources = [
@@ -365,10 +364,7 @@ function renderLevel(level) {
 // GRAPH ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SNAP = 0.000015; // ~1.5 m snap tolerance
-
-// Max gap (metres) we will stitch across between disconnected components.
-// Components further apart than this are left unconnected on this level.
+const SNAP = 0.000015;
 const MAX_STITCH_DIST = 50;
 
 function ptKey(lng, lat) {
@@ -413,8 +409,6 @@ class Graph {
     return comps;
   }
 
-  // Only stitch components within MAX_STITCH_DIST metres.
-  // Stitch edges get a 10× penalty so real corridor paths always win.
   stitchComponents() {
     let comps = this.components();
     if (comps.length <= 1) return;
@@ -510,6 +504,8 @@ function buildGraph(level) {
 }
 
 // ─── DIJKSTRA ────────────────────────────────────────────────────────────────
+// Returns { path, dist } where path is an array of [lng,lat] coordinates
+// AND the path is guaranteed to start at startKey and end exactly at endKey.
 function dijkstra(g, startKey, endKey) {
   const dist2   = { [startKey]: 0 };
   const prev    = {};
@@ -521,7 +517,7 @@ function dijkstra(g, startKey, endKey) {
     const [d, u] = pq.shift();
     if (visited.has(u)) continue;
     visited.add(u);
-    if (u === endKey) break;
+    if (u === endKey) break; // stop the moment we settle the destination
     for (const {key:v, cost} of (g.adj[u]||[])) {
       if (visited.has(v)) continue;
       const nd = d + cost;
@@ -534,37 +530,15 @@ function dijkstra(g, startKey, endKey) {
 
   if (dist2[endKey] === undefined) return null;
 
+  // Reconstruct path by walking prev[] back from endKey → startKey.
+  // This gives EXACTLY the nodes on the shortest path, nothing more.
   const path = [];
   let cur = endKey;
-  while (cur !== undefined) { path.unshift(g.nodes[cur]); cur = prev[cur]; }
+  while (cur !== undefined) {
+    path.unshift(g.nodes[cur]);
+    cur = prev[cur];
+  }
   return { path, dist: dist2[endKey] };
-}
-
-// ─── PATH TRUNCATION ─────────────────────────────────────────────────────────
-// Trim any overshoot tail past the destination: find the path node closest
-// to the destination centroid and cut everything after it.
-function truncateAtDestination(path, destCentroid) {
-  if (path.length <= 2) return path;
-  let closestIdx = 0;
-  let closestDist = Infinity;
-  for (let i = 0; i < path.length; i++) {
-    const d = dist(path[i], destCentroid);
-    if (d < closestDist) { closestDist = d; closestIdx = i; }
-  }
-  return path.slice(0, closestIdx + 1);
-}
-
-// Trim any overshoot tail before the origin: find the path node closest
-// to the origin centroid and cut everything before it.
-function truncateAtOrigin(path, fromCentroid) {
-  if (path.length <= 2) return path;
-  let closestIdx = 0;
-  let closestDist = Infinity;
-  for (let i = 0; i < path.length; i++) {
-    const d = dist(path[i], fromCentroid);
-    if (d < closestDist) { closestDist = d; closestIdx = i; }
-  }
-  return path.slice(closestIdx);
 }
 
 // ─── ROUTE ───────────────────────────────────────────────────────────────────
@@ -599,6 +573,7 @@ document.getElementById('btn-route').addEventListener('click', () => {
     setStatus('⚠️ No corridor graph found for this level.'); return;
   }
 
+  // Snap each POI onto the graph — snapPoint returns the exact graph node key
   const fromKey = g.snapPoint(fromPoi.centroid[0], fromPoi.centroid[1]);
   const toKey   = g.snapPoint(toPoi.centroid[0],   toPoi.centroid[1]);
 
@@ -612,18 +587,19 @@ document.getElementById('btn-route').addEventListener('click', () => {
     }
   }
 
+  // Run Dijkstra — path is reconstructed via prev[] from endKey back to startKey,
+  // so it contains exactly the nodes on the shortest path, no overshoot possible.
   const result = dijkstra(g, fromKey, toKey);
   if (!result) {
     setStatus('❌ No route found — please report the selected pair.');
     return;
   }
 
-  // Truncate any overshoot at both ends of the path
-  let path = result.path;
-  path = truncateAtOrigin(path, fromPoi.centroid);
-  path = truncateAtDestination(path, toPoi.centroid);
+  // path[0]  === g.nodes[fromKey]  (start snap node)
+  // path[-1] === g.nodes[toKey]    (end snap node)
+  // No truncation needed — the prev[] reconstruction is exact by definition.
+  const latlngs = result.path.map(p => [p[1], p[0]]);
 
-  const latlngs = path.map(p => [p[1], p[0]]);
   routeLayer = L.polyline(latlngs, {
     color:'#ff5722', weight:5, opacity:0.9, dashArray:'10 6'
   }).addTo(map);
@@ -633,7 +609,6 @@ document.getElementById('btn-route').addEventListener('click', () => {
 
   map.fitBounds(routeLayer.getBounds(), {padding:[60,60]});
 
-  // Use the original full Dijkstra distance for the walking estimate
   const metres = Math.round(result.dist);
   const mins   = Math.max(1, Math.round(metres / 80));
   setStatus(`✅ Route found: <span>${metres} m</span> · approx <span>${mins} min</span> walk &nbsp;|&nbsp; ${fromPoi.name} → ${toPoi.name}`);
