@@ -8,71 +8,40 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
-
   #header {
-    background: #16213e;
-    padding: 10px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    border-bottom: 2px solid #0f3460;
-    z-index: 1000;
+    background: #16213e; padding: 10px 16px; display: flex;
+    align-items: center; gap: 12px; flex-wrap: wrap;
+    border-bottom: 2px solid #0f3460; z-index: 1000;
   }
   #header h1 { font-size: 15px; color: #e94560; white-space: nowrap; }
-
   .ctrl-group { display: flex; align-items: center; gap: 6px; }
   .ctrl-group label { font-size: 12px; color: #aaa; }
-
   select, button {
-    background: #0f3460;
-    color: #eee;
-    border: 1px solid #e94560;
-    border-radius: 4px;
-    padding: 5px 10px;
-    font-size: 12px;
-    cursor: pointer;
+    background: #0f3460; color: #eee; border: 1px solid #e94560;
+    border-radius: 4px; padding: 5px 10px; font-size: 12px; cursor: pointer;
   }
   select:focus, button:focus { outline: 2px solid #e94560; }
   button:hover { background: #e94560; color: #fff; }
-
   .level-btn {
-    padding: 5px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    background: #0f3460;
-    color: #aaa;
-    border: 1px solid #0f3460;
+    padding: 5px 12px; border-radius: 4px; font-size: 12px;
+    background: #0f3460; color: #aaa; border: 1px solid #0f3460;
   }
   .level-btn.active { background: #e94560; color: #fff; border-color: #e94560; }
-
   #status-bar {
-    background: #0f3460;
-    padding: 6px 16px;
-    font-size: 12px;
-    color: #aaa;
-    min-height: 28px;
-    border-bottom: 1px solid #16213e;
+    background: #0f3460; padding: 6px 16px; font-size: 12px;
+    color: #aaa; min-height: 28px; border-bottom: 1px solid #16213e;
   }
   #status-bar span { color: #e94560; font-weight: bold; }
-
   #map { flex: 1; }
-
   #legend {
-    position: absolute;
-    bottom: 24px;
-    right: 10px;
-    background: rgba(22,33,62,0.93);
-    border: 1px solid #0f3460;
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 11px;
-    z-index: 1000;
-    min-width: 130px;
+    position: absolute; bottom: 24px; right: 10px;
+    background: rgba(22,33,62,0.93); border: 1px solid #0f3460;
+    border-radius: 6px; padding: 10px 14px; font-size: 11px;
+    z-index: 1000; min-width: 130px;
   }
   #legend h4 { color: #e94560; margin-bottom: 6px; font-size: 12px; }
   .leg-item { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
-  .leg-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .leg-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
   .leg-line { width: 22px; height: 3px; flex-shrink: 0; border-radius: 2px; }
 </style>
 </head>
@@ -80,7 +49,6 @@
 
 <div id="header">
   <h1 id="header-title">🛫 Indoor Routing</h1>
-
   <div class="ctrl-group">
     <label>Terminal:</label>
     <select id="sel-terminal">
@@ -96,30 +64,25 @@
       <option value="W">Terminal W Gates</option>
     </select>
   </div>
-
   <div class="ctrl-group">
     <label>Level:</label>
     <button class="level-btn" data-level="1">L1</button>
     <button class="level-btn" data-level="2">L2</button>
     <button class="level-btn active" data-level="3">L3</button>
   </div>
-
   <div class="ctrl-group">
     <label>From:</label>
     <select id="sel-from"><option value="">— select —</option></select>
   </div>
-
   <div class="ctrl-group">
     <label>To:</label>
     <select id="sel-to"><option value="">— select —</option></select>
   </div>
-
   <button id="btn-route">Find Route</button>
   <button id="btn-clear">Clear</button>
 </div>
 
 <div id="status-bar">Ready — choose a terminal &amp; level, pick From &amp; To, then click <b>Find Route</b>.</div>
-
 <div id="map"></div>
 
 <div id="legend">
@@ -140,36 +103,38 @@
 
 // ─── TERMINAL CONFIG ──────────────────────────────────────────────────────────
 const TERMINALS = {
-  T1:  { label: 'Terminal 1',        folder: 'Terminal_1',        prefix: 'T1'  },
-  T2:  { label: 'Terminal 2',        folder: 'Terminal_2',        prefix: 'T2'  },
-  T3:  { label: 'Terminal 3',        folder: 'Terminal_3',        prefix: 'T3'  },
-  T4:  { label: 'Terminal 4',        folder: 'Terminal_4',        prefix: 'T4'  },
-  T6:  { label: 'Terminal 6',        folder: 'Terminal_6',        prefix: 'T6'  },
-  T7:  { label: 'Terminal 7',        folder: 'Terminal_7',        prefix: 'T7'  },
-  T8:  { label: 'Terminal 8',        folder: 'Terminal_8',        prefix: 'T8'  },
-  TB:  { label: 'Terminal B',        folder: 'Terminal_B',        prefix: 'TB'  },
-  Reg: { label: 'Terminal Regional', folder: 'Terminal_Regional', prefix: 'Reg' },
-  W:   { label: 'Terminal W Gates',  folder: 'Terminal_Wgates',   prefix: 'W'   },
+  T1:  { label:'Terminal 1',        folder:'Terminal_1'        },
+  T2:  { label:'Terminal 2',        folder:'Terminal_2'        },
+  T3:  { label:'Terminal 3',        folder:'Terminal_3'        },
+  T4:  { label:'Terminal 4',        folder:'Terminal_4'        },
+  T6:  { label:'Terminal 6',        folder:'Terminal_6'        },
+  T7:  { label:'Terminal 7',        folder:'Terminal_7'        },
+  T8:  { label:'Terminal 8',        folder:'Terminal_8'        },
+  TB:  { label:'Terminal B',        folder:'Terminal_B'        },
+  Reg: { label:'Terminal Regional', folder:'Terminal_Regional' },
+  W:   { label:'Terminal W Gates',  folder:'Terminal_Wgates'   },
 };
 
 function getFiles(termKey) {
-  const { folder, prefix } = TERMINALS[termKey];
+  const { folder } = TERMINALS[termKey];
+  const pfx = termKey === 'Reg' ? 'Reg' : termKey;
   const base = folder + '/';
   return {
-    corridors : base + prefix + '_corridors.geojson',
-    connect   : base + prefix + '_Connect.geojson',
-    gates     : base + prefix + '_gates.geojson',
-    food      : base + prefix + '_food_beverage.geojson',
-    shops     : base + prefix + '_shops.geojson',
-    restrooms : base + prefix + '_restrooms.geojson',
-    service   : base + prefix + '_service.geojson',
-    services  : base + prefix + '_services.geojson',
-    vert      : base + prefix + '_vertical_circulation.geojson',
-    building  : base + prefix + '_building.geojson',
+    graph    : base + 'graph.json',
+    gates    : base + pfx + '_gates.geojson',
+    food     : base + pfx + '_food_beverage.geojson',
+    shops    : base + pfx + '_shops.geojson',
+    restrooms: base + pfx + '_restrooms.geojson',
+    service  : base + pfx + '_service.geojson',
+    services : base + pfx + '_services.geojson',
+    vert     : base + pfx + '_vertical_circulation.geojson',
+    corridors: base + pfx + '_corridors.geojson',
+    connect  : base + pfx + '_Connect.geojson',
+    building : base + pfx + '_building.geojson',
   };
 }
 
-// ─── MAP INIT ──────���─────────────────────────────────────────────────────────
+// ─── MAP INIT ────────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: true });
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 22
@@ -179,6 +144,7 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
 let currentTerminal = 'T1';
 let currentLevel    = '3';
 let allData   = {};
+let graphData = null;   // { nodes:{id:{lng,lat,level}}, edges:[{from,to,cost,level}] }
 let poiList   = [];
 let mapLayers = [];
 let routeLayer = null;
@@ -187,10 +153,12 @@ let markerFrom = null, markerTo = null;
 const statusEl = document.getElementById('status-bar');
 function setStatus(msg) { statusEl.innerHTML = msg; }
 
-// ─── LOAD ALL FILES ───────────────────────────────────────────────────────────
+// ─── LOAD ────────────────────────────────────────────────────────────────────
 async function loadAll() {
-  setStatus('Loading GeoJSON data…');
-  allData = {};
+  setStatus('Loading data…');
+  allData   = {};
+  graphData = null;
+
   const FILES = getFiles(currentTerminal);
   const entries = await Promise.all(
     Object.entries(FILES).map(async ([key, file]) => {
@@ -200,11 +168,20 @@ async function loadAll() {
         return [key, await r.json()];
       } catch(e) {
         console.warn('Could not load', file, e.message);
-        return [key, { type:'FeatureCollection', features:[] }];
+        return [key, key === 'graph' ? null : { type:'FeatureCollection', features:[] }];
       }
     })
   );
-  entries.forEach(([k,v]) => allData[k] = v);
+
+  entries.forEach(([k, v]) => {
+    if (k === 'graph') graphData = v;
+    else allData[k] = v;
+  });
+
+  if (!graphData) {
+    setStatus('⚠️ graph.json not found — run build_graph.py first.');
+  }
+
   buildPoiList();
   renderLevel(currentLevel);
   setStatus('Data loaded. Select From &amp; To and click <b>Find Route</b>.');
@@ -233,15 +210,6 @@ function dist(a, b) {
   return Math.sqrt(dx*dx + dy*dy);
 }
 
-function closestPointOnSegment(p, p1, p2) {
-  const dx = p2[0]-p1[0], dy = p2[1]-p1[1];
-  const lenSq = dx*dx + dy*dy;
-  if (lenSq === 0) return p1;
-  let t = ((p[0]-p1[0])*dx + (p[1]-p1[1])*dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  return [p1[0]+t*dx, p1[1]+t*dy];
-}
-
 // ─── POI LIST ────────────────────────────────────────────────────────────────
 function buildPoiList() {
   poiList = [];
@@ -264,7 +232,7 @@ function buildPoiList() {
       const p   = f.properties || {};
       const lvl = String(p.level || p.Level || '3');
       const name= p.name || p.feature_id || (type+'_'+uid);
-      poiList.push({ id: uid++, type, level: lvl, centroid: c, name, props: p, geometry: f.geometry });
+      poiList.push({ id: uid++, type, level: lvl, centroid: c, name });
     });
   });
 }
@@ -279,10 +247,10 @@ function populateSelects(level) {
 
   const relevant = poiList.filter(p => p.level === level);
   const groups   = {};
-  relevant.forEach(p => (groups[p.type]=groups[p.type]||[]).push(p));
+  relevant.forEach(p => (groups[p.type] = groups[p.type] || []).push(p));
 
   Object.entries(groups).forEach(([type, items]) => {
-    const label = type.charAt(0).toUpperCase()+type.slice(1);
+    const label = type.charAt(0).toUpperCase() + type.slice(1);
     const og1 = document.createElement('optgroup'); og1.label = label;
     const og2 = document.createElement('optgroup'); og2.label = label;
     items.forEach(p => {
@@ -318,16 +286,16 @@ function renderLevel(level) {
     addLayer(L.geoJSON({type:'FeatureCollection',features}, {
       style: {
         color:    '#4fc3f7',
-        weight:   key==='corridors' ? 3    : 1.5,
-        opacity:  key==='corridors' ? 0.7  : 0.4,
-        dashArray:key==='connect'   ? '4 4': null
+        weight:   key==='corridors' ? 3   : 1.5,
+        opacity:  key==='corridors' ? 0.7 : 0.4,
+        dashArray:key==='connect'   ? '4 4' : null
       }
     }));
   });
 
   const poiStyles = {
-    gate:     '#e94560', food:    '#ffb300', shop:    '#66bb6a',
-    restroom: '#ab47bc', service: '#26c6da', vertical:'#78909c'
+    gate:'#e94560', food:'#ffb300', shop:'#66bb6a',
+    restroom:'#ab47bc', service:'#26c6da', vertical:'#78909c'
   };
   const typeMap = {
     gates:'gate', food:'food', shops:'shop', restrooms:'restroom',
@@ -341,7 +309,7 @@ function renderLevel(level) {
     const color = poiStyles[typeMap[key]] || '#aaa';
     addLayer(L.geoJSON({type:'FeatureCollection',features},{
       style: { color, fillColor:color, weight:1, fillOpacity:0.5, opacity:0.9 },
-      onEachFeature(f,layer) {
+      onEachFeature(f, layer) {
         const name = f.properties?.name || f.properties?.feature_id || 'POI';
         layer.bindTooltip(name, { sticky:true, className:'poi-tip' });
       }
@@ -354,171 +322,64 @@ function renderLevel(level) {
     const src = allData.building?.features?.length
       ? allData.building
       : { type:'FeatureCollection',
-          features: (allData.corridors?.features||[]).filter(f =>
-            String(f.properties?.Level||f.properties?.level||'3') === level) };
+          features:(allData.corridors?.features||[]).filter(f=>
+            String(f.properties?.Level||f.properties?.level||'3')===level) };
     if (src.features?.length) map.fitBounds(L.geoJSON(src).getBounds(), {padding:[30,30]});
   } catch(e) {}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GRAPH ENGINE
+// ROUTING  — uses pre-built graph.json, no runtime snapping/stitching
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SNAP = 0.000015;
-const MAX_STITCH_DIST = 50;
+// Build adjacency list from graph.json for the requested level
+function buildAdjacency(level) {
+  if (!graphData) return null;
+  const adj   = {};   // nodeId → [{to, cost}]
+  const nodes = graphData.nodes;
 
-function ptKey(lng, lat) {
-  return `${(Math.round(lng/SNAP)*SNAP).toFixed(8)},${(Math.round(lat/SNAP)*SNAP).toFixed(8)}`;
-}
-
-class Graph {
-  constructor() {
-    this.nodes = {};
-    this.adj   = {};
-  }
-
-  addNode(lng, lat) {
-    const k = ptKey(lng, lat);
-    if (!this.nodes[k]) this.nodes[k] = [lng, lat];
-    if (!this.adj[k])   this.adj[k]   = [];
-    return k;
-  }
-
-  addEdge(k1, k2, extraCost = 0) {
-    const cost = dist(this.nodes[k1], this.nodes[k2]) + extraCost;
-    if (cost === 0) return;
-    if (!this.adj[k1].some(e=>e.key===k2)) this.adj[k1].push({key:k2, cost});
-    if (!this.adj[k2].some(e=>e.key===k1)) this.adj[k2].push({key:k1, cost});
-  }
-
-  components() {
-    const visited = new Set();
-    const comps   = [];
-    for (const k of Object.keys(this.nodes)) {
-      if (visited.has(k)) continue;
-      const comp  = new Set();
-      const queue = [k];
-      while (queue.length) {
-        const cur = queue.pop();
-        if (visited.has(cur)) continue;
-        visited.add(cur); comp.add(cur);
-        (this.adj[cur]||[]).forEach(e => { if (!visited.has(e.key)) queue.push(e.key); });
-      }
-      comps.push(comp);
-    }
-    return comps;
-  }
-
-  stitchComponents() {
-    let comps = this.components();
-    if (comps.length <= 1) return;
-    comps.sort((a,b) => b.size - a.size);
-    const mainSet = comps[0];
-
-    for (let i = 1; i < comps.length; i++) {
-      const small = comps[i];
-      let bestCost = Infinity, bestSK = null, bestMK = null;
-
-      for (const sk of small) {
-        const sc = this.nodes[sk];
-        for (const mk of mainSet) {
-          const c = dist(sc, this.nodes[mk]);
-          if (c < bestCost) { bestCost = c; bestSK = sk; bestMK = mk; }
-        }
-      }
-
-      if (!bestSK || !bestMK || bestCost > MAX_STITCH_DIST) {
-        small.forEach(k => mainSet.add(k));
-        continue;
-      }
-
-      this.addEdge(bestSK, bestMK, bestCost * 10);
-      small.forEach(k => mainSet.add(k));
-    }
-  }
-
-  snapPoint(lng, lat) {
-    const pt = [lng, lat];
-    let bestNode = null, bestNodeDist = Infinity;
-    for (const [k, coord] of Object.entries(this.nodes)) {
-      const d = dist(pt, coord);
-      if (d < bestNodeDist) { bestNodeDist = d; bestNode = k; }
-    }
-
-    let bestProj = null, bestProjDist = Infinity;
-    const seen = new Set();
-    for (const [k1, neighbors] of Object.entries(this.adj)) {
-      for (const {key:k2} of neighbors) {
-        const eid = k1<k2?`${k1}|${k2}`:`${k2}|${k1}`;
-        if (seen.has(eid)) continue;
-        seen.add(eid);
-        const foot = closestPointOnSegment(pt, this.nodes[k1], this.nodes[k2]);
-        const d = dist(pt, foot);
-        if (d < bestProjDist) { bestProjDist = d; bestProj = foot; }
-      }
-    }
-
-    if (bestProj && bestProjDist < bestNodeDist - 0.5) {
-      const vk = this.addNode(bestProj[0], bestProj[1]);
-      seen.clear();
-      for (const [k1, neighbors] of Object.entries(this.adj)) {
-        for (const {key:k2} of neighbors) {
-          const eid = k1<k2?`${k1}|${k2}`:`${k2}|${k1}`;
-          if (seen.has(eid)) continue;
-          seen.add(eid);
-          const foot = closestPointOnSegment(pt, this.nodes[k1], this.nodes[k2]);
-          if (dist(foot, bestProj) < 0.1) {
-            this.addEdge(vk, k1);
-            this.addEdge(vk, k2);
-          }
-        }
-      }
-      return vk;
-    }
-
-    return bestNode;
-  }
-}
-
-// ─── BUILD GRAPH ─────────────────────────────────────────────────────────────
-function buildGraph(level) {
-  const g = new Graph();
-  ['corridors','connect'].forEach(src => {
-    (allData[src]?.features||[]).forEach(f => {
-      const p = f.properties||{};
-      if (String(p.Level||p.level||'3') !== level) return;
-      const geom  = f.geometry;
-      const lines = geom.type==='LineString'      ? [geom.coordinates]
-                  : geom.type==='MultiLineString' ?  geom.coordinates : [];
-      lines.forEach(coords => {
-        for (let i=0; i<coords.length-1; i++) {
-          const k1 = g.addNode(coords[i][0],   coords[i][1]);
-          const k2 = g.addNode(coords[i+1][0], coords[i+1][1]);
-          if (k1 !== k2) g.addEdge(k1, k2);
-        }
-      });
-    });
+  // Only include nodes on this level
+  Object.entries(nodes).forEach(([id, n]) => {
+    if (String(n.level) === level) adj[id] = [];
   });
-  g.stitchComponents();
-  return g;
+
+  graphData.edges.forEach(e => {
+    if (String(e.level) !== level) return;
+    if (adj[e.from] === undefined || adj[e.to] === undefined) return;
+    adj[e.from].push({ to: e.to,   cost: e.cost });
+    adj[e.to  ].push({ to: e.from, cost: e.cost });
+  });
+
+  return adj;
 }
 
-// ─── DIJKSTRA ────────────────────────────────────────────────────────────────
-// Returns { path, dist } where path is an array of [lng,lat] coordinates
-// AND the path is guaranteed to start at startKey and end exactly at endKey.
-function dijkstra(g, startKey, endKey) {
-  const dist2   = { [startKey]: 0 };
-  const prev    = {};
-  const visited = new Set();
-  const pq      = [[0, startKey]];
+// Find the graph node (on this level) closest to a [lng, lat] centroid
+function nearestNode(lng, lat, level) {
+  if (!graphData) return null;
+  let bestId = null, bestDist = Infinity;
+  Object.entries(graphData.nodes).forEach(([id, n]) => {
+    if (String(n.level) !== level) return;
+    const d = dist([lng, lat], [n.lng, n.lat]);
+    if (d < bestDist) { bestDist = d; bestId = id; }
+  });
+  return bestId;
+}
+
+// Dijkstra on the pre-built adjacency list — returns { path:[{lng,lat}], dist }
+function dijkstra(adj, startId, endId) {
+  const nodes  = graphData.nodes;
+  const dist2  = { [startId]: 0 };
+  const prev   = {};
+  const visited= new Set();
+  const pq     = [[0, startId]];
 
   while (pq.length) {
-    pq.sort((a,b)=>a[0]-b[0]);
+    pq.sort((a,b) => a[0]-b[0]);
     const [d, u] = pq.shift();
     if (visited.has(u)) continue;
     visited.add(u);
-    if (u === endKey) break; // stop the moment we settle the destination
-    for (const {key:v, cost} of (g.adj[u]||[])) {
+    if (u === endId) break;
+    for (const {to:v, cost} of (adj[u]||[])) {
       if (visited.has(v)) continue;
       const nd = d + cost;
       if (dist2[v] === undefined || nd < dist2[v]) {
@@ -528,20 +389,20 @@ function dijkstra(g, startKey, endKey) {
     }
   }
 
-  if (dist2[endKey] === undefined) return null;
+  if (dist2[endId] === undefined) return null;
 
-  // Reconstruct path by walking prev[] back from endKey → startKey.
-  // This gives EXACTLY the nodes on the shortest path, nothing more.
+  // Reconstruct — walks prev[] from endId back to startId: exact, no overshoot
   const path = [];
-  let cur = endKey;
+  let cur = endId;
   while (cur !== undefined) {
-    path.unshift(g.nodes[cur]);
+    const n = nodes[cur];
+    path.unshift([n.lng, n.lat]);
     cur = prev[cur];
   }
-  return { path, dist: dist2[endKey] };
+  return { path, dist: dist2[endId] };
 }
 
-// ─── ROUTE ───────────────────────────────────────────────────────────────────
+// ─── ROUTE HANDLER ───────────────────────────────────────────────────────────
 function clearRoute() {
   if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
   if (markerFrom) { map.removeLayer(markerFrom); markerFrom = null; }
@@ -565,39 +426,31 @@ document.getElementById('btn-route').addEventListener('click', () => {
   const toPoi   = poiList.find(p=>String(p.id)===String(toId));
   if (!fromPoi||!toPoi) { setStatus('⚠️ Could not find selected POIs.'); return; }
 
+  if (!graphData) { setStatus('⚠️ graph.json not loaded — run build_graph.py first.'); return; }
+
   setStatus('Computing route…');
   clearRoute();
 
-  const g = buildGraph(currentLevel);
-  if (!Object.keys(g.nodes).length) {
-    setStatus('⚠️ No corridor graph found for this level.'); return;
+  const adj = buildAdjacency(currentLevel);
+  if (!adj || !Object.keys(adj).length) {
+    setStatus('⚠️ No graph nodes found for this level.'); return;
   }
 
-  // Snap each POI onto the graph — snapPoint returns the exact graph node key
-  const fromKey = g.snapPoint(fromPoi.centroid[0], fromPoi.centroid[1]);
-  const toKey   = g.snapPoint(toPoi.centroid[0],   toPoi.centroid[1]);
+  // Snap each POI to its nearest pre-built graph node
+  const fromNodeId = nearestNode(fromPoi.centroid[0], fromPoi.centroid[1], currentLevel);
+  const toNodeId   = nearestNode(toPoi.centroid[0],   toPoi.centroid[1],   currentLevel);
 
-  // Bridge snap nodes if they ended up in different components
-  const compsAfterSnap = g.components();
-  if (compsAfterSnap.length > 1) {
-    const fromComp = compsAfterSnap.find(c => c.has(fromKey));
-    const toComp   = compsAfterSnap.find(c => c.has(toKey));
-    if (fromComp !== toComp) {
-      g.addEdge(fromKey, toKey, 0);
-    }
+  if (!fromNodeId || !toNodeId) {
+    setStatus('⚠️ Could not snap POIs to graph nodes.'); return;
   }
 
-  // Run Dijkstra — path is reconstructed via prev[] from endKey back to startKey,
-  // so it contains exactly the nodes on the shortest path, no overshoot possible.
-  const result = dijkstra(g, fromKey, toKey);
+  const result = dijkstra(adj, fromNodeId, toNodeId);
   if (!result) {
-    setStatus('❌ No route found — please report the selected pair.');
-    return;
+    setStatus('❌ No route found between these two points.'); return;
   }
 
-  // path[0]  === g.nodes[fromKey]  (start snap node)
-  // path[-1] === g.nodes[toKey]    (end snap node)
-  // No truncation needed — the prev[] reconstruction is exact by definition.
+  // result.path is reconstructed via prev[] — exactly from fromNode to toNode,
+  // no overshoot, no truncation needed.
   const latlngs = result.path.map(p => [p[1], p[0]]);
 
   routeLayer = L.polyline(latlngs, {
@@ -611,7 +464,7 @@ document.getElementById('btn-route').addEventListener('click', () => {
 
   const metres = Math.round(result.dist);
   const mins   = Math.max(1, Math.round(metres / 80));
-  setStatus(`✅ Route found: <span>${metres} m</span> · approx <span>${mins} min</span> walk &nbsp;|&nbsp; ${fromPoi.name} → ${toPoi.name}`);
+  setStatus(`✅ Route: <span>${metres} m</span> · ~<span>${mins} min</span> walk &nbsp;|&nbsp; ${fromPoi.name} → ${toPoi.name}`);
 });
 
 document.getElementById('btn-clear').addEventListener('click', () => {
