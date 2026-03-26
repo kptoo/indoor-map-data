@@ -4,9 +4,9 @@ build_graph.py
 Builds a dense, topologically-snapped routing graph from corridor + connect
 GeoJSON files for every terminal.
 
-Changes vs previous version:
-  - Subdivides every segment into MAX_SEG_M metre intervals (default 3 m)
-    so that POI snap targets are always close to the actual corridor line.
+Segments are subdivided into MAX_SEG_M metre intervals (default 3 m) so that
+POI snap targets are always within a few metres of an actual graph node —
+no runtime virtual-node injection needed.
 
 Usage:
     python build_graph.py
@@ -19,7 +19,7 @@ import json
 import os
 import math
 
-from shapely.geometry import shape, LineString
+from shapely.geometry import shape
 from shapely.ops import unary_union, snap as shapely_snap
 import networkx as nx
 
@@ -41,7 +41,7 @@ TERMINALS = {
 
 LEVELS         = ["1", "2", "3"]
 SNAP_TOL       = 0.00002   # ~2 m — endpoint snapping tolerance
-MAX_STITCH_M   = 50        # max gap to bridge between components
+MAX_STITCH_M   = 50        # max gap to bridge between disconnected components
 STITCH_PENALTY = 10        # cost multiplier for stitch bridge edges
 MAX_SEG_M      = 3.0       # subdivide segments longer than this (metres)
 
@@ -54,7 +54,7 @@ def haversine_m(lng1, lat1, lng2, lat2):
     dphi = math.radians(lat2 - lat1)
     dlam = math.radians(lng2 - lng1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlam/2)**2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
 def rc(v):
@@ -107,29 +107,28 @@ def snap_lines(lines):
 
 def subdivide_segment(a, b, max_m=MAX_SEG_M):
     """
-    Split the segment a→b into sub-segments of at most max_m metres.
-    Returns list of coordinate pairs covering the full segment.
+    Split segment a→b into sub-segments of at most max_m metres.
+    Returns list of (p0, p1) coordinate pairs covering the full segment.
     """
     seg_len = haversine_m(a[0], a[1], b[0], b[1])
     if seg_len <= max_m:
         return [(a, b)]
-
     n = math.ceil(seg_len / max_m)
     pts = []
     for i in range(n):
         t0 = i / n
         t1 = (i + 1) / n
-        p0 = (a[0] + t0 * (b[0] - a[0]), a[1] + t0 * (b[1] - a[1]))
-        p1 = (a[0] + t1 * (b[0] - a[0]), a[1] + t1 * (b[1] - a[1]))
+        p0 = (a[0] + t0*(b[0]-a[0]), a[1] + t0*(b[1]-a[1]))
+        p1 = (a[0] + t1*(b[0]-a[0]), a[1] + t1*(b[1]-a[1]))
         pts.append((p0, p1))
     return pts
 
 
 def build_nx_graph(lines):
     """
-    Build a NetworkX graph from snapped lines.
-    Every segment is subdivided into MAX_SEG_M metre intervals so
-    POI snap targets are always close to the actual corridor geometry.
+    Build NetworkX graph from snapped lines with dense subdivision.
+    Every segment is split into MAX_SEG_M metre intervals so the nearest
+    node to any POI is always just a few metres away.
     """
     G = nx.Graph()
     for ln in lines:
@@ -139,7 +138,6 @@ def build_nx_graph(lines):
             b = (rc(coords[i+1][0]), rc(coords[i+1][1]))
             if a == b:
                 continue
-            # Subdivide long segments
             for (p0, p1) in subdivide_segment(a, b):
                 na = (rc(p0[0]), rc(p0[1]))
                 nb = (rc(p1[0]), rc(p1[1]))
@@ -155,7 +153,10 @@ def build_nx_graph(lines):
 
 
 def stitch(G):
-    """Connect isolated components with penalised bridge edges (max MAX_STITCH_M)."""
+    """
+    Connect isolated components with penalised bridge edges.
+    Only stitches components within MAX_STITCH_M metres of each other.
+    """
     while True:
         comps = sorted(nx.connected_components(G), key=len, reverse=True)
         if len(comps) <= 1:
@@ -182,31 +183,34 @@ def stitch(G):
 
 def serialise(G, level):
     node_list = list(G.nodes())
-    id_map = {n: str(i) for i, n in enumerate(node_list)}
+    id_map    = {n: str(i) for i, n in enumerate(node_list)}
+
     nodes = {
         id_map[n]: {"lng": n[0], "lat": n[1], "level": level}
         for n in node_list
     }
+
     edges = []
-    seen = set()
+    seen  = set()
     for u, v, data in G.edges(data=True):
         key = tuple(sorted([id_map[u], id_map[v]]))
         if key in seen:
             continue
         seen.add(key)
         e = {
-            "from": id_map[u],
-            "to":   id_map[v],
-            "cost": round(data["cost"], 4),
-            "level": level
+            "from":  id_map[u],
+            "to":    id_map[v],
+            "cost":  round(data["cost"], 4),
+            "level": level,
         }
         if data.get("stitch"):
             e["stitch"] = True
         edges.append(e)
+
     return nodes, edges
 
 
-# ── Per-terminal processing ───────────────────────────────────────────────────
+# ── Per-terminal processing ────────────���──────────────────────────────────────
 
 def process_terminal(term_key, folder, prefix):
     print(f"\n{'='*55}\n  {term_key}  ({folder})\n{'='*55}")
@@ -224,8 +228,8 @@ def process_terminal(term_key, folder, prefix):
             continue
 
         snapped = snap_lines(lines)
-        G = build_nx_graph(snapped)
-        G = stitch(G)
+        G       = build_nx_graph(snapped)
+        G       = stitch(G)
 
         n_comps = nx.number_connected_components(G)
         print(f"{G.number_of_nodes()} nodes, "
