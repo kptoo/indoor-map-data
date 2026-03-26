@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Airport Indoor Routing Demo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+
+  #header {
+    background: #16213e;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    border-bottom: 2px solid #0f3460;
+    z-index: 1000;
+  }
+  #header h1 { font-size: 15px; color: #e94560; white-space: nowrap; }
+
+  .ctrl-group { display: flex; align-items: center; gap: 6px; }
+  .ctrl-group label { font-size: 12px; color: #aaa; }
+
+  select, button {
+    background: #0f3460;
+    color: #eee;
+    border: 1px solid #e94560;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  select:focus, button:focus { outline: 2px solid #e94560; }
+  button:hover { background: #e94560; color: #fff; }
+
+  .level-btn {
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #0f3460;
+    color: #aaa;
+    border: 1px solid #0f3460;
+  }
+  .level-btn.active { background: #e94560; color: #fff; border-color: #e94560; }
+
+  #status-bar {
+    background: #0f3460;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #aaa;
+    min-height: 28px;
+    border-bottom: 1px solid #16213e;
+  }
+  #status-bar span { color: #e94560; font-weight: bold; }
+
+  #map { flex: 1; }
+
+  #legend {
+    position: absolute;
+    bottom: 24px;
+    right: 10px;
+    background: rgba(22,33,62,0.93);
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 11px;
+    z-index: 1000;
+    min-width: 130px;
+  }
+  #legend h4 { color: #e94560; margin-bottom: 6px; font-size: 12px; }
+  .leg-item { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+  .leg-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .leg-line { width: 22px; height: 3px; flex-shrink: 0; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1 id="header-title">🛫 Indoor Routing</h1>
+
+  <div class="ctrl-group">
+    <label>Terminal:</label>
+    <select id="sel-terminal">
+      <option value="T1">Terminal 1</option>
+      <option value="T2">Terminal 2</option>
+      <option value="T3">Terminal 3</option>
+      <option value="T4">Terminal 4</option>
+      <option value="T6">Terminal 6</option>
+      <option value="T7">Terminal 7</option>
+      <option value="T8">Terminal 8</option>
+      <option value="TB">Terminal B</option>
+      <option value="Reg">Terminal Regional</option>
+      <option value="W">Terminal W Gates</option>
+    </select>
+  </div>
+
+  <div class="ctrl-group">
+    <label>Level:</label>
+    <button class="level-btn" data-level="1">L1</button>
+    <button class="level-btn" data-level="2">L2</button>
+    <button class="level-btn active" data-level="3">L3</button>
+  </div>
+
+  <div class="ctrl-group">
+    <label>From:</label>
+    <select id="sel-from"><option value="">— select —</option></select>
+  </div>
+
+  <div class="ctrl-group">
+    <label>To:</label>
+    <select id="sel-to"><option value="">— select —</option></select>
+  </div>
+
+  <button id="btn-route">Find Route</button>
+  <button id="btn-clear">Clear</button>
+</div>
+
+<div id="status-bar">Ready — choose a terminal &amp; level, pick From &amp; To, then click <b>Find Route</b>.</div>
+
+<div id="map"></div>
+
+<div id="legend">
+  <h4>Legend</h4>
+  <div class="leg-item"><div class="leg-line" style="background:#4fc3f7"></div> Corridor</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#e94560"></div> Gate</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#ffb300"></div> Food &amp; Beverage</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#66bb6a"></div> Shop</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#ab47bc"></div> Restroom</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#26c6da"></div> Service</div>
+  <div class="leg-item" style="margin-top:4px">
+    <div style="width:22px;height:4px;border-top:3px dashed #ff5722;flex-shrink:0"></div> Route
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+
+// ─── TERMINAL CONFIG ──────────────────────────────────────────────────────────
+// Maps terminal key → { label, folder, prefix }
+const TERMINALS = {
+  T1:  { label: 'Terminal 1',        folder: 'Terminal_1',        prefix: 'T1'  },
+  T2:  { label: 'Terminal 2',        folder: 'Terminal_2',        prefix: 'T2'  },
+  T3:  { label: 'Terminal 3',        folder: 'Terminal_3',        prefix: 'T3'  },
+  T4:  { label: 'Terminal 4',        folder: 'Terminal_4',        prefix: 'T4'  },
+  T6:  { label: 'Terminal 6',        folder: 'Terminal_6',        prefix: 'T6'  },
+  T7:  { label: 'Terminal 7',        folder: 'Terminal_7',        prefix: 'T7'  },
+  T8:  { label: 'Terminal 8',        folder: 'Terminal_8',        prefix: 'T8'  },
+  TB:  { label: 'Terminal B',        folder: 'Terminal_B',        prefix: 'TB'  },
+  Reg: { label: 'Terminal Regional', folder: 'Terminal_Regional', prefix: 'Reg' },
+  W:   { label: 'Terminal W Gates',  folder: 'Terminal_Wgates',   prefix: 'W'   },
+};
+
+function getFiles(termKey) {
+  const { folder, prefix } = TERMINALS[termKey];
+  const base = folder + '/';
+  return {
+    corridors : base + prefix + '_corridors.geojson',
+    connect   : base + prefix + '_Connect.geojson',
+    gates     : base + prefix + '_gates.geojson',
+    food      : base + prefix + '_food_beverage.geojson',
+    shops     : base + prefix + '_shops.geojson',
+    restrooms : base + prefix + '_restrooms.geojson',
+    service   : base + prefix + '_service.geojson',
+    services  : base + prefix + '_services.geojson',
+    vert      : base + prefix + '_vertical_circulation.geojson',
+    building  : base + prefix + '_building.geojson',
+  };
+}
+
+// ─── MAP INIT ────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 22
+}).addTo(map);
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let currentTerminal = 'T1';
+let currentLevel    = '3';
+let allData  = {};
+let poiList  = [];
+let mapLayers = [];
+let routeLayer = null;
+let markerFrom = null, markerTo = null;
+
+const statusEl = document.getElementById('status-bar');
+function setStatus(msg) { statusEl.innerHTML = msg; }
+
+// ─── LOAD ALL FILES FOR CURRENT TERMINAL ─────────────────────────────────────
+async function loadAll() {
+  setStatus('Loading GeoJSON data…');
+  allData = {};
+  const FILES = getFiles(currentTerminal);
+  const entries = await Promise.all(
+    Object.entries(FILES).map(async ([key, file]) => {
+      try {
+        const r = await fetch(file);
+        if (!r.ok) throw new Error(r.status);
+        return [key, await r.json()];
+      } catch(e) {
+        console.warn('Could not load', file, e.message);
+        return [key, { type:'FeatureCollection', features:[] }];
+      }
+    })
+  );
+  entries.forEach(([k,v]) => allData[k] = v);
+  buildPoiList();
+  renderLevel(currentLevel);
+  setStatus('Data loaded. Select From &amp; To and click <b>Find Route</b>.');
+}
+
+// ─── GEOMETRY HELPERS ────────────────────────────────────────────────────────
+function centroid(geom) {
+  if (!geom) return null;
+  if (geom.type === 'Point') return [geom.coordinates[0], geom.coordinates[1]];
+  const pts = [];
+  function collect(c) {
+    if (typeof c[0] === 'number') { pts.push(c); return; }
+    c.forEach(collect);
+  }
+  collect(geom.coordinates);
+  if (!pts.length) return null;
+  return [
+    pts.reduce((s,p)=>s+p[0],0)/pts.length,
+    pts.reduce((s,p)=>s+p[1],0)/pts.length
+  ];
+}
+
+function dist(a, b) {
+  const dx = (a[0]-b[0]) * Math.cos((a[1]+b[1])*0.5*Math.PI/180) * 111320;
+  const dy = (a[1]-b[1]) * 110540;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+function closestPointOnSegment(p, p1, p2) {
+  const dx = p2[0]-p1[0], dy = p2[1]-p1[1];
+  const lenSq = dx*dx + dy*dy;
+  if (lenSq === 0) return p1;
+  let t = ((p[0]-p1[0])*dx + (p[1]-p1[1])*dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return [p1[0]+t*dx, p1[1]+t*dy];
+}
+
+// ─── POI LIST ────────────────────────────────────────────────────────────────
+function buildPoiList() {
+  poiList = [];
+  const sources = [
+    { key:'gates',     type:'gate'     },
+    { key:'food',      type:'food'     },
+    { key:'shops',     type:'shop'     },
+    { key:'restrooms', type:'restroom' },
+    { key:'service',   type:'service'  },
+    { key:'services',  type:'service'  },
+    { key:'vert',      type:'vertical' },
+  ];
+  let uid = 0;
+  sources.forEach(({key, type}) => {
+    const fc = allData[key];
+    if (!fc) return;
+    fc.features.forEach(f => {
+      const c = centroid(f.geometry);
+      if (!c) return;
+      const p   = f.properties || {};
+      const lvl = String(p.level || p.Level || '3');
+      const name= p.name || p.feature_id || (type+'_'+uid);
+      poiList.push({ id: uid++, type, level: lvl, centroid: c, name, props: p, geometry: f.geometry });
+    });
+  });
+}
+
+// ─── SELECTS ─────────────────────────────────────────────────────────────────
+function populateSelects(level) {
+  const from = document.getElementById('sel-from');
+  const to   = document.getElementById('sel-to');
+  const prevFrom = from.value, prevTo = to.value;
+  from.innerHTML = '<option value="">— select From —</option>';
+  to.innerHTML   = '<option value="">— select To —</option>';
+
+  const relevant = poiList.filter(p => p.level === level);
+  const groups   = {};
+  relevant.forEach(p => (groups[p.type]=groups[p.type]||[]).push(p));
+
+  Object.entries(groups).forEach(([type, items]) => {
+    const label = type.charAt(0).toUpperCase()+type.slice(1);
+    const og1 = document.createElement('optgroup'); og1.label = label;
+    const og2 = document.createElement('optgroup'); og2.label = label;
+    items.forEach(p => {
+      og1.appendChild(new Option(p.name, p.id));
+      og2.appendChild(new Option(p.name, p.id));
+    });
+    from.appendChild(og1);
+    to.appendChild(og2);
+  });
+
+  if ([...from.options].some(o=>o.value==prevFrom)) from.value = prevFrom;
+  if ([...to.options  ].some(o=>o.value==prevTo  )) to.value   = prevTo;
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+function clearLayers() { mapLayers.forEach(l=>map.removeLayer(l)); mapLayers=[]; }
+function addLayer(l) { l.addTo(map); mapLayers.push(l); return l; }
+
+function renderLevel(level) {
+  clearLayers();
+  clearRoute();
+
+  if (allData.building?.features?.length) {
+    addLayer(L.geoJSON(allData.building, {
+      style: { color:'#334466', fillColor:'#1e2d4a', fillOpacity:0.5, weight:1.5 }
+    }));
+  }
+
+  ['corridors','connect'].forEach(key => {
+    const features = (allData[key]?.features||[]).filter(f =>
+      String(f.properties?.Level||f.properties?.level||'3') === level);
+    if (!features.length) return;
+    addLayer(L.geoJSON({type:'FeatureCollection',features}, {
+      style: { color:'#4fc3f7', weight: key==='corridors'?3:1.5,
+               opacity: key==='corridors'?0.7:0.4, dashArray: key==='connect'?'4 4':null }
+    }));
+  });
+
+  const poiStyles = {
+    gate:     '#e94560', food: '#ffb300', shop: '#66bb6a',
+    restroom: '#ab47bc', service: '#26c6da', vertical: '#78909c'
+  };
+  const typeMap = {gates:'gate',food:'food',shops:'shop',restrooms:'restroom',
+                   service:'service',services:'service',vert:'vertical'};
+
+  ['gates','food','shops','restrooms','service','services','vert'].forEach(key => {
+    const features = (allData[key]?.features||[]).filter(f =>
+      String(f.properties?.level||f.properties?.Level||'3') === level);
+    if (!features.length) return;
+    const color = poiStyles[typeMap[key]] || '#aaa';
+    addLayer(L.geoJSON({type:'FeatureCollection',features},{
+      style: { color, fillColor:color, weight:1, fillOpacity:0.5, opacity:0.9 },
+      onEachFeature(f,layer) {
+        const name = f.properties?.name || f.properties?.feature_id || 'POI';
+        layer.bindTooltip(name, { sticky:true, className:'poi-tip' });
+      }
+    }));
+  });
+
+  populateSelects(level);
+
+  try {
+    const src = allData.building?.features?.length
+      ? allData.building
+      : { type:'FeatureCollection',
+          features: (allData.corridors?.features||[]).filter(f =>
+            String(f.properties?.Level||f.properties?.level||'3') === level) };
+    if (src.features?.length) map.fitBounds(L.geoJSON(src).getBounds(), {padding:[30,30]});
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GRAPH ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SNAP = 0.000015;
+
+function ptKey(lng, lat) {
+  return `${(Math.round(lng/SNAP)*SNAP).toFixed(8)},${(Math.round(lat/SNAP)*SNAP).toFixed(8)}`;
+}
+
+class Graph {
+  constructor() {
+    this.nodes = {};
+    this.adj   = {};
+  }
+
+  addNode(lng, lat) {
+    const k = ptKey(lng, lat);
+    if (!this.nodes[k]) this.nodes[k] = [lng, lat];
+    if (!this.adj[k])   this.adj[k]   = [];
+    return k;
+  }
+
+  addEdge(k1, k2, extraCost = 0) {
+    const cost = dist(this.nodes[k1], this.nodes[k2]) + extraCost;
+    if (cost === 0) return;
+    if (!this.adj[k1].some(e=>e.key===k2)) this.adj[k1].push({key:k2, cost});
+    if (!this.adj[k2].some(e=>e.key===k1)) this.adj[k2].push({key:k1, cost});
+  }
+
+  components() {
+    const visited = new Set();
+    const comps   = [];
+    for (const k of Object.keys(this.nodes)) {
+      if (visited.has(k)) continue;
+      const comp = new Set();
+      const queue = [k];
+      while (queue.length) {
+        const cur = queue.pop();
+        if (visited.has(cur)) continue;
+        visited.add(cur); comp.add(cur);
+        (this.adj[cur]||[]).forEach(e => { if (!visited.has(e.key)) queue.push(e.key); });
+      }
+      comps.push(comp);
+    }
+    return comps;
+  }
+
+  stitchComponents() {
+    let comps = this.components();
+    if (comps.length <= 1) return;
+    comps.sort((a,b) => b.size - a.size);
+    const mainSet = comps[0];
+    for (let i = 1; i < comps.length; i++) {
+      const small = comps[i];
+      let bestCost = Infinity, bestSK = null, bestMK = null;
+      for (const sk of small) {
+        const sc = this.nodes[sk];
+        for (const mk of mainSet) {
+          const c = dist(sc, this.nodes[mk]);
+          if (c < bestCost) { bestCost = c; bestSK = sk; bestMK = mk; }
+        }
+      }
+      if (bestSK && bestMK) {
+        this.addEdge(bestSK, bestMK, 0);
+        small.forEach(k => mainSet.add(k));
+      }
+    }
+  }
+
+  snapPoint(lng, lat) {
+    const pt = [lng, lat];
+    let bestNode = null, bestNodeDist = Infinity;
+    for (const [k, coord] of Object.entries(this.nodes)) {
+      const d = dist(pt, coord);
+      if (d < bestNodeDist) { bestNodeDist = d; bestNode = k; }
+    }
+
+    let bestProj = null, bestProjDist = Infinity;
+    const seen = new Set();
+    for (const [k1, neighbors] of Object.entries(this.adj)) {
+      for (const {key:k2} of neighbors) {
+        const eid = k1<k2?`${k1}|${k2}`:`${k2}|${k1}`;
+        if (seen.has(eid)) continue;
+        seen.add(eid);
+        const foot = closestPointOnSegment(pt, this.nodes[k1], this.nodes[k2]);
+        const d = dist(pt, foot);
+        if (d < bestProjDist) { bestProjDist = d; bestProj = foot; }
+      }
+    }
+
+    if (bestProj && bestProjDist < bestNodeDist - 0.5) {
+      const vk = this.addNode(bestProj[0], bestProj[1]);
+      seen.clear();
+      for (const [k1, neighbors] of Object.entries(this.adj)) {
+        for (const {key:k2} of neighbors) {
+          const eid = k1<k2?`${k1}|${k2}`:`${k2}|${k1}`;
+          if (seen.has(eid)) continue;
+          seen.add(eid);
+          const foot = closestPointOnSegment(pt, this.nodes[k1], this.nodes[k2]);
+          if (dist(foot, bestProj) < 0.1) {
+            this.addEdge(vk, k1);
+            this.addEdge(vk, k2);
+          }
+        }
+      }
+      return vk;
+    }
+
+    return bestNode;
+  }
+}
+
+// ─── BUILD GRAPH ─────────────────────────────────────────────────────────────
+function buildGraph(level) {
+  const g = new Graph();
+  ['corridors','connect'].forEach(src => {
+    (allData[src]?.features||[]).forEach(f => {
+      const p = f.properties||{};
+      if (String(p.Level||p.level||'3') !== level) return;
+      const geom = f.geometry;
+      const lines = geom.type==='LineString' ? [geom.coordinates]
+                  : geom.type==='MultiLineString' ? geom.coordinates : [];
+      lines.forEach(coords => {
+        for (let i=0; i<coords.length-1; i++) {
+          const k1 = g.addNode(coords[i][0],   coords[i][1]);
+          const k2 = g.addNode(coords[i+1][0], coords[i+1][1]);
+          if (k1 !== k2) g.addEdge(k1, k2);
+        }
+      });
+    });
+  });
+  g.stitchComponents();
+  return g;
+}
+
+// ─── DIJKSTRA ────────────────────────────────────────────────────────────────
+function dijkstra(g, startKey, endKey) {
+  const dist2   = { [startKey]: 0 };
+  const prev    = {};
+  const visited = new Set();
+  const pq = [[0, startKey]];
+
+  while (pq.length) {
+    pq.sort((a,b)=>a[0]-b[0]);
+    const [d, u] = pq.shift();
+    if (visited.has(u)) continue;
+    visited.add(u);
+    if (u === endKey) break;
+    for (const {key:v, cost} of (g.adj[u]||[])) {
+      if (visited.has(v)) continue;
+      const nd = d + cost;
+      if (dist2[v] === undefined || nd < dist2[v]) {
+        dist2[v] = nd; prev[v] = u;
+        pq.push([nd, v]);
+      }
+    }
+  }
+
+  if (dist2[endKey] === undefined) return null;
+
+  const path = [];
+  let cur = endKey;
+  while (cur !== undefined) { path.unshift(g.nodes[cur]); cur = prev[cur]; }
+  return { path, dist: dist2[endKey] };
+}
+
+// ─── ROUTE ───────────────────────────────────────────────────────────────────
+function clearRoute() {
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  if (markerFrom) { map.removeLayer(markerFrom); markerFrom = null; }
+  if (markerTo)   { map.removeLayer(markerTo);   markerTo   = null; }
+}
+
+function makeMarker(latlng, color, label) {
+  return L.circleMarker(latlng, {
+    radius:10, color:'#fff', weight:2, fillColor:color, fillOpacity:1
+  }).bindTooltip(label, { permanent:true, direction:'top',
+    className:'route-label', offset:[0,-12] });
+}
+
+document.getElementById('btn-route').addEventListener('click', () => {
+  const fromId = document.getElementById('sel-from').value;
+  const toId   = document.getElementById('sel-to').value;
+  if (!fromId || !toId) { setStatus('⚠️ Please select both <b>From</b> and <b>To</b> points.'); return; }
+  if (fromId === toId)  { setStatus('⚠️ From and To are the same location.'); return; }
+
+  const fromPoi = poiList.find(p=>String(p.id)===String(fromId));
+  const toPoi   = poiList.find(p=>String(p.id)===String(toId));
+  if (!fromPoi||!toPoi) { setStatus('⚠️ Could not find selected POIs.'); return; }
+
+  setStatus('Computing route…');
+  clearRoute();
+
+  const g = buildGraph(currentLevel);
+  if (!Object.keys(g.nodes).length) {
+    setStatus('⚠️ No corridor graph found for this level.'); return;
+  }
+
+  const fromKey = g.snapPoint(fromPoi.centroid[0], fromPoi.centroid[1]);
+  const toKey   = g.snapPoint(toPoi.centroid[0],   toPoi.centroid[1]);
+
+  const compsAfterSnap = g.components();
+  if (compsAfterSnap.length > 1) {
+    const fromComp = compsAfterSnap.find(c => c.has(fromKey));
+    const toComp   = compsAfterSnap.find(c => c.has(toKey));
+    if (fromComp !== toComp) {
+      g.addEdge(fromKey, toKey, 0);
+    }
+  }
+
+  const result = dijkstra(g, fromKey, toKey);
+
+  if (!result) {
+    setStatus('❌ No route found — please report the selected pair.');
+    return;
+  }
+
+  const latlngs = result.path.map(p=>[p[1],p[0]]);
+  routeLayer = L.polyline(latlngs, {
+    color:'#ff5722', weight:5, opacity:0.9, dashArray:'10 6'
+  }).addTo(map);
+
+  markerFrom = makeMarker([fromPoi.centroid[1],fromPoi.centroid[0]], '#00e676', '🟢 '+fromPoi.name).addTo(map);
+  markerTo   = makeMarker([toPoi.centroid[1],  toPoi.centroid[0]  ], '#e94560', '🔴 '+toPoi.name).addTo(map);
+
+  map.fitBounds(routeLayer.getBounds(), {padding:[60,60]});
+
+  const metres = Math.round(result.dist);
+  const mins   = Math.max(1, Math.round(metres/80));
+  setStatus(`✅ Route found: <span>${metres} m</span> · approx <span>${mins} min</span> walk &nbsp;|&nbsp; ${fromPoi.name} → ${toPoi.name}`);
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  clearRoute();
+  document.getElementById('sel-from').value = '';
+  document.getElementById('sel-to').value   = '';
+  setStatus('Cleared. Select From &amp; To and click <b>Find Route</b>.');
+});
+
+// ─── LEVEL BUTTONS ───────────────────────────────────────────────────────────
+document.querySelectorAll('.level-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.level-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLevel = btn.dataset.level;
+    renderLevel(currentLevel);
+    setStatus(`Switched to Level ${currentLevel}.`);
+  });
+});
+
+// ─── TERMINAL SELECTOR ───────────────────────────────────────────────────────
+document.getElementById('sel-terminal').addEventListener('change', function() {
+  currentTerminal = this.value;
+  const label = TERMINALS[currentTerminal].label;
+  document.getElementById('header-title').textContent = '🛫 ' + label + ' · Indoor Routing';
+  document.title = label + ' – Indoor Routing Demo';
+  clearRoute();
+  loadAll();
+});
+
+// ─── STYLES ──────────────────────────────────────────────────────────────────
+const s = document.createElement('style');
+s.textContent = `
+  .poi-tip    { background:#16213e; color:#eee; border:1px solid #0f3460;
+                font-size:11px; padding:3px 7px; border-radius:4px; }
+  .route-label{ background:transparent; border:none; box-shadow:none;
+                color:#fff; font-size:11px; font-weight:bold; }
+`;
+document.head.appendChild(s);
+
+loadAll();
+</script>
+</body>
+</html>
