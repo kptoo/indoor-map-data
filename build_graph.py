@@ -24,19 +24,10 @@ Output format (graph.json):
 import json
 import os
 import math
-import itertools
-from collections import defaultdict
 
-try:
-    from shapely.geometry import shape, MultiLineString, LineString, Point
-    from shapely.ops import unary_union, snap as shapely_snap, split
-except ImportError:
-    raise SystemExit("Install shapely:  pip install shapely")
-
-try:
-    import networkx as nx
-except ImportError:
-    raise SystemExit("Install networkx:  pip install networkx")
+from shapely.geometry import shape, LineString
+from shapely.ops import unary_union, snap as shapely_snap
+import networkx as nx
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -54,16 +45,15 @@ TERMINALS = {
     "W":   {"folder": "Terminal_Wgates",   "prefix": "W"},
 }
 
-# All levels to process per terminal
-LEVELS = ["1", "2", "3"]
+LEVELS        = ["1", "2", "3"]
+SNAP_TOL      = 0.00002   # ~2 m in degrees
+MAX_STITCH_M  = 50        # max gap to stitch (metres)
+STITCH_PENALTY= 10        # cost multiplier for stitch edges
 
-# Snap tolerance in degrees (~1 m at equator ≈ 0.000009°, use 2 m)
-SNAP_TOLERANCE = 0.00002
 
-# ── Helpers ─────────────────────────���─────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def haversine_m(lng1, lat1, lng2, lat2):
-    """Approximate distance in metres between two lng/lat points."""
     R = 6_371_000
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
@@ -72,12 +62,8 @@ def haversine_m(lng1, lat1, lng2, lat2):
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def round_coord(v, decimals=7):
-    return round(v, decimals)
-
-
-def coord_key(lng, lat):
-    return (round_coord(lng), round_coord(lat))
+def rc(v):
+    return round(v, 7)
 
 
 def load_geojson(path):
@@ -88,7 +74,6 @@ def load_geojson(path):
 
 
 def extract_lines(geojson, level):
-    """Return list of shapely LineString objects for the given level."""
     lines = []
     for feat in geojson.get("features", []):
         props = feat.get("properties") or {}
@@ -106,21 +91,14 @@ def extract_lines(geojson, level):
     return lines
 
 
-def snap_lines_together(lines, tolerance=SNAP_TOLERANCE):
-    """
-    Snap all lines to each other so endpoints that are within `tolerance`
-    degrees are merged to the same coordinate.  Returns a new list of
-    LineStrings with unified coordinates.
-    """
+def snap_lines(lines):
     if not lines:
         return []
-
-    # Build a unified reference geometry and snap everything to it
     reference = unary_union(lines)
     snapped = []
     for ln in lines:
         try:
-            s = shapely_snap(ln, reference, tolerance)
+            s = shapely_snap(ln, reference, SNAP_TOL)
             if s.geom_type == "LineString" and len(s.coords) >= 2:
                 snapped.append(s)
             elif s.geom_type == "MultiLineString":
@@ -130,172 +108,116 @@ def snap_lines_together(lines, tolerance=SNAP_TOLERANCE):
     return snapped
 
 
-def build_graph_for_level(lines):
-    """
-    Given a list of snapped LineStrings, build a NetworkX graph.
-    Nodes are (lng, lat) tuples.  Edge weight = haversine distance in metres.
-    Returns nx.Graph.
-    """
+def build_nx_graph(lines):
     G = nx.Graph()
-
     for ln in lines:
         coords = list(ln.coords)
         for i in range(len(coords) - 1):
-            a = (round_coord(coords[i][0]),   round_coord(coords[i][1]))
-            b = (round_coord(coords[i+1][0]), round_coord(coords[i+1][1]))
+            a = (rc(coords[i][0]),   rc(coords[i][1]))
+            b = (rc(coords[i+1][0]), rc(coords[i+1][1]))
             if a == b:
                 continue
             cost = haversine_m(a[0], a[1], b[0], b[1])
-            # Keep the cheaper edge if it already exists
             if G.has_edge(a, b):
                 if G[a][b]["cost"] > cost:
                     G[a][b]["cost"] = cost
             else:
                 G.add_edge(a, b, cost=cost)
-
     return G
 
 
-def stitch_components(G, max_gap_m=50):
-    """
-    Connect disconnected components by adding a bridge edge between the two
-    closest nodes across components, but only if they are within max_gap_m
-    metres.  Repeats until no more stitchable pairs exist.
-    """
+def stitch(G):
     while True:
-        comps = list(nx.connected_components(G))
+        comps = sorted(nx.connected_components(G), key=len, reverse=True)
         if len(comps) <= 1:
             break
-
-        # Sort largest first so small orphans attach to the main body
-        comps.sort(key=len, reverse=True)
         main = comps[0]
         stitched = False
-
         for i in range(1, len(comps)):
             small = comps[i]
-            best_dist = math.inf
-            best_pair = None
-
+            best_d, best_pair = math.inf, None
             for sn in small:
                 for mn in main:
                     d = haversine_m(sn[0], sn[1], mn[0], mn[1])
-                    if d < best_dist:
-                        best_dist = d
-                        best_pair = (sn, mn)
-
-            if best_pair and best_dist <= max_gap_m:
-                sn, mn = best_pair
-                # Penalise stitch edges 10× so real corridors are always preferred
-                G.add_edge(sn, mn, cost=best_dist * 10, stitch=True)
-                # Merge into main for subsequent iterations
+                    if d < best_d:
+                        best_d, best_pair = d, (sn, mn)
+            if best_pair and best_d <= MAX_STITCH_M:
+                G.add_edge(best_pair[0], best_pair[1],
+                           cost=best_d * STITCH_PENALTY, stitch=True)
                 main = main | small
                 stitched = True
-
         if not stitched:
             break
-
     return G
 
 
-def graph_to_json(G, level):
-    """Serialise a NetworkX graph to the JSON format expected by the JS router."""
-    nodes = {}
+def serialise(G, level):
     node_list = list(G.nodes())
-
-    # Assign integer IDs for compact JSON
     id_map = {n: str(i) for i, n in enumerate(node_list)}
-
-    for n, nid in id_map.items():
-        nodes[nid] = {"lng": n[0], "lat": n[1], "level": level}
-
+    nodes = {id_map[n]: {"lng": n[0], "lat": n[1], "level": level}
+             for n in node_list}
     edges = []
     seen = set()
     for u, v, data in G.edges(data=True):
-        eid = (id_map[u], id_map[v])
-        if eid in seen or (eid[1], eid[0]) in seen:
+        key = tuple(sorted([id_map[u], id_map[v]]))
+        if key in seen:
             continue
-        seen.add(eid)
-        edges.append({
-            "from": id_map[u],
-            "to":   id_map[v],
-            "cost": round(data["cost"], 4),
-            "level": level,
-            **({"stitch": True} if data.get("stitch") else {})
-        })
-
+        seen.add(key)
+        e = {"from": id_map[u], "to": id_map[v],
+             "cost": round(data["cost"], 4), "level": level}
+        if data.get("stitch"):
+            e["stitch"] = True
+        edges.append(e)
     return nodes, edges
+
+
+# ── Per-terminal processing ───────────────────────────────────────────────────
+
+def process_terminal(term_key, folder, prefix):
+    print(f"\n{'='*55}\n  {term_key}  ({folder})\n{'='*55}")
+
+    corr_gj = load_geojson(os.path.join(folder, f"{prefix}_corridors.geojson"))
+    conn_gj = load_geojson(os.path.join(folder, f"{prefix}_Connect.geojson"))
+
+    all_nodes, all_edges = {}, []
+
+    for level in LEVELS:
+        print(f"  L{level} … ", end="", flush=True)
+        lines = extract_lines(corr_gj, level) + extract_lines(conn_gj, level)
+        if not lines:
+            print("no geometry.")
+            continue
+
+        snapped = snap_lines(lines)
+        G = build_nx_graph(snapped)
+        G = stitch(G)
+
+        n_comps = nx.number_connected_components(G)
+        print(f"{G.number_of_nodes()} nodes, "
+              f"{G.number_of_edges()} edges, "
+              f"{n_comps} component(s) ✓")
+
+        nodes, edges = serialise(G, level)
+        all_nodes.update(nodes)
+        all_edges.extend(edges)
+
+    out_path = os.path.join(folder, "graph.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump({"nodes": all_nodes, "edges": all_edges}, f, separators=(",", ":"))
+
+    print(f"  → {out_path}  ({os.path.getsize(out_path)/1024:.1f} KB)")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def process_terminal(term_key, folder, prefix):
-    print(f"\n{'='*60}")
-    print(f"  Terminal: {term_key}  ({folder})")
-    print(f"{'='*60}")
-
-    corr_path = os.path.join(folder, f"{prefix}_corridors.geojson")
-    conn_path = os.path.join(folder, f"{prefix}_Connect.geojson")
-
-    corridors_gj = load_geojson(corr_path)
-    connect_gj   = load_geojson(conn_path)
-
-    all_nodes = {}
-    all_edges = []
-
-    for level in LEVELS:
-        print(f"  Level {level} …", end=" ")
-
-        lines = extract_lines(corridors_gj, level) + extract_lines(connect_gj, level)
-
-        if not lines:
-            print("no geometry, skipped.")
-            continue
-
-        print(f"{len(lines)} segments →", end=" ")
-
-        # 1. Snap endpoints together to close micro-gaps
-        snapped = snap_lines_together(lines, SNAP_TOLERANCE)
-        print(f"snapped →", end=" ")
-
-        # 2. Build graph
-        G = build_graph_for_level(snapped)
-        print(f"{G.number_of_nodes()} nodes, {G.number_of_edges()} edges →", end=" ")
-
-        # 3. Stitch disconnected components
-        G = stitch_components(G, max_gap_m=50)
-        comps = nx.number_connected_components(G)
-        print(f"{comps} component(s) after stitch →", end=" ")
-
-        # 4. Serialise
-        nodes, edges = graph_to_json(G, level)
-        print(f"serialised ✓")
-
-        all_nodes.update(nodes)
-        all_edges.extend(edges)
-
-    out = {"nodes": all_nodes, "edges": all_edges}
-    out_path = os.path.join(folder, "graph.json")
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(out, f, separators=(",", ":"))
-
-    size_kb = os.path.getsize(out_path) / 1024
-    print(f"\n  ✅  Written: {out_path}  ({size_kb:.1f} KB)")
-
-
 def main():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(base_dir)
-
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
     for term_key, cfg in TERMINALS.items():
-        folder = cfg["folder"]
-        prefix = cfg["prefix"]
-        if not os.path.isdir(folder):
-            print(f"⚠️  Folder not found, skipping: {folder}")
+        if not os.path.isdir(cfg["folder"]):
+            print(f"⚠️  Skipping {term_key} — folder not found: {cfg['folder']}")
             continue
-        process_terminal(term_key, folder, prefix)
-
-    print("\n🎉  All terminals processed.")
+        process_terminal(term_key, cfg["folder"], cfg["prefix"])
+    print("\n🎉  Done.")
 
 
 if __name__ == "__main__":
